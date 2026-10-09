@@ -228,7 +228,58 @@ AND (ua.centre_id IS NULL OR ua.centre_id = e.centre_id)</code></pre>
   <strong>OpenFGA</strong> when many applications share the same zones, areas and centres, or when some need access to individual items, such as workflow approvals, health records or devices. The cost is one more service to run, a sync step from each application, and extra work for list screens.
 </div>
 
-<h2>7. Where "policy" fits</h2>
+<h2>7. What a tuple is, and whether it beats a table</h2>
+<p>A tuple is one stored fact that links a user to a thing through a named relationship. It always has three parts, and reads as a sentence.</p>
+<div class="scroll">
+<table>
+  <thead><tr><th>User</th><th>Relation</th><th>Object</th><th>Read as</th><th>What it is</th></tr></thead>
+  <tbody>
+    <tr><td><code>user:deepak</code></td><td><code>admin</code></td><td><code>area:delhi</code></td><td>Deepak is admin of Delhi</td><td>A grant</td></tr>
+    <tr><td><code>zone:north</code></td><td><code>zone</code></td><td><code>area:delhi</code></td><td>North is the zone of Delhi</td><td>A parent link</td></tr>
+    <tr><td><code>centre:rohini</code></td><td><code>unit</code></td><td><code>employee:e103</code></td><td>Rohini is the unit of employee e103</td><td>An employee's place</td></tr>
+    <tr><td><code>group:payroll-south#member</code></td><td><code>salary_coordinator</code></td><td><code>zone:south</code></td><td>Members of payroll-south are salary coordinators of South</td><td>A grant to a group</td></tr>
+  </tbody>
+</table>
+</div>
+<p class="note" style="margin-top:10px">A tuple is not a rule (rules live in the model) and not an answer. No tuple says "Deepak can edit employee e105". OpenFGA works that out by following tuples.</p>
+
+<p style="margin-top:18px"><strong>The tuple table is itself a relational table.</strong> The storage is not better. What differs is that every kind of fact goes into one generic shape, and an engine interprets it for you.</p>
+<div class="scroll">
+<table>
+  <thead><tr><th></th><th class="sql">Your relational tables</th><th class="fga">Tuple table</th></tr></thead>
+  <tbody>
+    <tr><td>Shape</td><td>A table per kind of fact, each with its own columns</td><td>One table for every kind of fact: user, relation, object</td></tr>
+    <tr><td>A new kind of fact, such as groups or delegation</td><td>New table or columns, a migration, new joins in your queries</td><td>No schema change; new tuples go in the same table</td></tr>
+    <tr><td>Who interprets it</td><td>Queries you write</td><td>The OpenFGA engine, reading the model</td></tr>
+    <tr><td>Database safeguards</td><td>Foreign keys, column types, constraints</td><td>None from the database; ids are plain text, so a typo such as <code>centre:rohinni</code> is accepted</td></tr>
+    <tr><td>Joining with business data</td><td>Direct</td><td>Not possible; the data is in another service</td></tr>
+    <tr><td>Reading it by eye</td><td>Easy</td><td>Harder; you need the model to know what a row means</td></tr>
+  </tbody>
+</table>
+</div>
+<div class="two block">
+  <div class="card fga">
+    <h3>WHERE THE BENEFIT COMES FROM</h3>
+    <ul>
+      <li>You write no access queries; the model's rule applies to every check and every new record type</li>
+      <li>New kinds of relationship need no new tables</li>
+      <li>Every application asks the same way, through one API</li>
+      <li>The tree is not copied onto rows, so a centre move is one tuple</li>
+    </ul>
+  </div>
+  <div class="card sql">
+    <h3>WHERE THE RELATIONAL TABLE IS BETTER</h3>
+    <ul>
+      <li>Integrity: a foreign key stops a grant pointing at a centre that does not exist</li>
+      <li>Lists and reports: one query with filters, sorting and totals</li>
+      <li>One transaction: grant and business data change together, with no sync step</li>
+      <li>Familiar to everyone on the team</li>
+    </ul>
+  </div>
+</div>
+<p class="note" style="margin-top:12px">For one application with fixed rules, the tuple table is not better. It pays off when the same facts serve many applications and the kinds of relationship keep growing.</p>
+
+<h2>8. Where "policy" fits</h2>
 <p>There are three ways to express who may do what. Real systems mix them. A policy is a rule written as code that looks at facts about the user, the record and the request, and answers allow or deny.</p>
 <div class="three">
   <div class="card sql">

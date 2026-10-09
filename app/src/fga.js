@@ -171,6 +171,18 @@ export async function readAllTuples(fga, filter = {}) {
   return tuples;
 }
 
+// Reads the whole change log: every tuple write and delete, oldest first.
+export async function readAllChanges(fga) {
+  const changes = [];
+  let continuationToken;
+  for (;;) {
+    const page = await fga.readChanges({}, { pageSize: 100, continuationToken });
+    changes.push(...page.changes);
+    if (page.changes.length < 100) return changes;
+    continuationToken = page.continuation_token;
+  }
+}
+
 function emptyPermissions() {
   return Object.fromEntries(PERMISSIONS.map((p) => [p, false]));
 }

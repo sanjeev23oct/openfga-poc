@@ -70,6 +70,50 @@ coordinator. It is a sound design, with the trade-offs listed near the end.
 | The `EXISTS` clause | Nothing to write; OpenFGA derives it from the model | Built in |
 | `user` table | Nothing; a user exists as soon as a tuple names them | Not stored |
 
+## What a tuple is
+
+A tuple is one stored fact that links a user to a thing through a named relationship. It has three
+parts and reads as a sentence.
+
+| User | Relation | Object | Read as | What it is |
+| --- | --- | --- | --- | --- |
+| `user:deepak` | `admin` | `area:delhi` | Deepak is admin of Delhi | A grant |
+| `zone:north` | `zone` | `area:delhi` | North is the zone of Delhi | A parent link |
+| `centre:rohini` | `unit` | `employee:e103` | Rohini is the unit of employee e103 | An employee's place |
+| `group:payroll-south#member` | `salary_coordinator` | `zone:south` | Members of payroll-south are salary coordinators of South | A grant to a group |
+
+A tuple can also carry a condition, as in "Gita is coordinator of North, for HR only". A tuple is
+not a rule (rules live in the model) and not an answer: no tuple says "Deepak can edit employee
+e105". OpenFGA works that out by following tuples.
+
+### Is a tuple table better than a relational table?
+
+The tuple table is itself a relational table in Postgres, so the storage is not better. What
+differs is that every kind of fact goes into one generic shape, and an engine interprets it.
+
+| | Your relational tables | Tuple table |
+| --- | --- | --- |
+| Shape | A table per kind of fact, each with its own columns | One table for every kind of fact: user, relation, object |
+| A new kind of fact (groups, delegation, leave requests) | New table or columns, a migration, new joins in your queries | No schema change; new tuples go in the same table |
+| Who interprets it | Queries you write | The OpenFGA engine, reading the model |
+| Database safeguards | Foreign keys, column types, constraints | None from the database; ids are plain text, and the model only checks that types fit |
+| Joining with business data | Direct | Not possible; the data is in another service |
+| Reading it by eye | Easy | Harder; you need the model to know what a row means |
+
+The benefit comes from the engine and model around the table:
+
+- You write no access queries. The model's rule applies to every check and every new record type.
+- New kinds of relationship need no new tables.
+- Every application asks the same way, through one API.
+- The tree is not copied onto rows, so a centre move is one tuple.
+
+The relational table is better at integrity (a foreign key stops a grant pointing at a centre that
+does not exist, while a tuple naming `centre:rohinni` is accepted), at lists and reports, and at
+changing grant and business data in one transaction.
+
+For one application with fixed rules, the tuple table is not better. It pays off when the same
+facts serve many applications and the kinds of relationship keep growing.
+
 ## What the graph looks like
 
 There are two graphs. The model is the graph of rules. The tuples are the graph of facts. A check

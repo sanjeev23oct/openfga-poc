@@ -2,21 +2,25 @@
 // The caller is taken from the X-User header: there is no real login in this POC.
 import { fileURLToPath } from 'node:url';
 import express from 'express';
+import { transformer } from '@openfga/syntax-transformer';
 import {
   PERMISSIONS,
   Trace,
   checkEmployee,
   createClient,
+  loadStoreConfig,
   permissionsByBatchCheck,
   permissionsByListObjects,
   permissionsByUnits,
+  readAllChanges,
   readAllTuples,
   usersWithPermission,
 } from './fga.js';
 import * as seed from './org.js';
 
 const PORT = process.env.PORT ?? 4000;
-const fga = createClient();
+const storeConfig = loadStoreConfig();
+const fga = createClient(storeConfig);
 
 // In-memory copy of the HR data, so edits and moves last until the server restarts.
 const units = structuredClone(seed.units);
@@ -75,7 +79,9 @@ app.get('/api/meta', (req, res) => {
     roles: seed.ROLES,
     strategies: Object.keys(STRATEGIES),
     units: units.map((u) => ({ object: seed.objectId(u), type: u.type, parent: u.parent, path: unitPath(seed.objectId(u)) })),
-    storeId: fga.storeId,
+    storeId: storeConfig.storeId,
+    employees: employees.map((e) => ({ id: e.id, name: e.name })),
+    permissions: PERMISSIONS,
   });
 });
 
@@ -168,6 +174,174 @@ app.post('/api/units/move', async (req, res) => {
 app.get('/api/tuples', async (req, res) => {
   const tuples = await readAllTuples(fga);
   res.json({ count: tuples.length, tuples: tuples.map((t) => t.key) });
+});
+
+// ---- Explorer: raw views of everything the app and OpenFGA store. Not access controlled. ----
+
+const TREE_RELATIONS = ['country', 'zone', 'area', 'centre'];
+
+function tupleKind(relation) {
+  if (seed.ROLES.includes(relation)) return 'role grant';
+  if (relation === 'unit') return 'employee placement';
+  if (relation === 'member') return 'group membership';
+  return 'tree link';
+}
+
+function relationKind(relation) {
+  if (relation.startsWith('can_')) return 'permission';
+  if (seed.ROLES.includes(relation)) return 'role';
+  if (relation === 'member') return 'membership';
+  return 'link to parent';
+}
+
+// Turns the model DSL into one row per "define" line.
+function relationsFromDsl(dsl) {
+  const rows = [];
+  let type;
+  for (const line of dsl.split('\n')) {
+    const typeMatch = line.match(/^type (\S+)/);
+    const defineMatch = line.match(/^\s+define (\S+): (.+)$/);
+    if (typeMatch) type = typeMatch[1];
+    if (defineMatch) {
+      const [, relation, definition] = defineMatch;
+      rows.push({ type, relation, kind: relationKind(relation), definition });
+    }
+  }
+  return rows;
+}
+
+async function currentModel() {
+  const { authorization_models: models } = await fga.readAuthorizationModels();
+  const model = models.find((m) => m.id === storeConfig.modelId) ?? models[0];
+  const dsl = transformer.transformJSONToDSL(model);
+  return { models, model, dsl, relations: relationsFromDsl(dsl) };
+}
+
+const conditionText = (condition) =>
+  condition ? `${condition.name} ${JSON.stringify(condition.context ?? {})}` : '';
+
+function tupleRow(key, extra = {}) {
+  const [objectType, objectId] = key.object.split(':');
+  return {
+    kind: tupleKind(key.relation),
+    object_type: objectType,
+    object_id: objectId,
+    relation: key.relation,
+    user: key.user,
+    condition: conditionText(key.condition),
+    ...extra,
+  };
+}
+
+// Everything the HR application itself holds. In a real system this is the HR database.
+app.get('/api/explorer/hr', (req, res) => {
+  res.json({
+    employees: employees.map(({ salary, ...e }) => ({
+      ...e,
+      annual_ctc: salary.annualCtc,
+      bank_account: salary.bankAccount,
+    })),
+    units: units.map((u) => ({
+      object: seed.objectId(u),
+      type: u.type,
+      id: u.id,
+      name: u.name,
+      parent: u.parent ?? '',
+      employees: employees.filter((e) => e.unit === seed.objectId(u)).length,
+    })),
+    departments: seed.DEPARTMENTS.map((code) => ({
+      code,
+      employees: employees.filter((e) => e.department === code).length,
+    })),
+    users: seed.personas.map((p) => ({ id: p.id, object: `user:${p.id}`, description: p.label })),
+  });
+});
+
+// Everything OpenFGA holds for this store, read through its API.
+app.get('/api/explorer/fga', async (req, res) => {
+  const [store, { models, model, dsl, relations }, tuples, changes] = await Promise.all([
+    fga.getStore(),
+    currentModel(),
+    readAllTuples(fga),
+    readAllChanges(fga),
+  ]);
+  res.json({
+    store: [{ id: store.id, name: store.name, created_at: store.created_at, updated_at: store.updated_at }],
+    models: models.map((m) => ({
+      id: m.id,
+      schema_version: m.schema_version,
+      types: m.type_definitions.length,
+      conditions: Object.keys(m.conditions ?? {}).join(', '),
+      in_use: m.id === model.id ? 'yes' : '',
+    })),
+    dsl,
+    relations,
+    tuples: tuples.map((t) => tupleRow(t.key, { written_at: t.timestamp })),
+    changes: changes.map((c, index) => ({
+      '#': index + 1,
+      operation: c.operation === 'TUPLE_OPERATION_WRITE' ? 'write' : 'delete',
+      ...tupleRow(c.tuple_key),
+      at: c.timestamp,
+    })),
+  });
+});
+
+// Asks OpenFGA for the answer, then lists the stored tuples that lead to it.
+// The path is rebuilt by the app from the tuples; OpenFGA itself returns only allowed or not.
+app.get('/api/explain', async (req, res) => {
+  const { user, permission } = req.query;
+  const employee = findEmployee(req.query.employee);
+  if (!user || !employee || !PERMISSIONS.includes(permission)) {
+    return res.status(400).json({ error: 'user, permission and employee are required' });
+  }
+  const allowed = await checkEmployee(fga, req.trace, user, permission, employee);
+  const [{ relations }, stored] = await Promise.all([currentModel(), readAllTuples(fga)]);
+  const tuples = stored.map((t) => t.key);
+  const text = (t) => `${t.user} is ${t.relation} of ${t.object}`;
+
+  // "can_view_basic: admin or coordinator or salary_coordinator" on a unit type lists the roles.
+  const roles = relations
+    .find((r) => r.type === 'zone' && r.relation === permission)
+    .definition.split(' or ');
+  const groups = tuples
+    .filter((t) => t.relation === 'member' && t.user === `user:${user}`)
+    .map((t) => `${t.object}#member`);
+
+  const steps = [];
+  let link = tuples.find((t) => t.object === `employee:${employee.id}` && t.relation === 'unit');
+  while (link) {
+    const unit = link.user;
+    const grants = tuples
+      .filter((t) => t.object === unit && seed.ROLES.includes(t.relation))
+      .filter((t) => t.user === `user:${user}` || groups.includes(t.user))
+      .map((t) => {
+        const givesPermission = roles.includes(t.relation);
+        const departments = t.condition?.context?.allowed_departments;
+        const departmentOk = !departments || departments.includes(employee.department);
+        return {
+          tuple: text(t),
+          via: t.user.startsWith('group:') ? `member of ${t.user.split('#')[0]}` : 'direct grant',
+          role: t.relation,
+          givesPermission,
+          departments: departments ?? [],
+          departmentOk,
+          counts: givesPermission && departmentOk,
+        };
+      });
+    steps.push({ unit, unitPath: unitPath(unit), reachedBy: text(link), grants });
+    link = tuples.find((t) => t.object === unit && TREE_RELATIONS.includes(t.relation));
+  }
+
+  res.json({
+    allowed,
+    question: `Can user:${user} ${permission} employee:${employee.id}?`,
+    employee: { id: employee.id, name: employee.name, department: employee.department },
+    rolesThatGivePermission: roles,
+    groups,
+    steps,
+    explained: steps.some((s) => s.grants.some((g) => g.counts)),
+    trace: req.trace.summary(),
+  });
 });
 
 app.use((err, req, res, next) => {

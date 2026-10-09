@@ -22,6 +22,18 @@ npm start                       # API and UI on http://localhost:4000
 
 Open http://localhost:4000, pick a persona, and compare what each one sees.
 
+The UI has four screens:
+
+| Screen | What it shows |
+| --- | --- |
+| Access demo | What the selected persona can see and edit; grant, revoke and move a unit |
+| HR application data | The raw tables the HR application holds: employees, org units, departments, users |
+| OpenFGA data | Everything OpenFGA stores: the store, model versions, the model as text and as a table of rules, all tuples, and the change log |
+| Check tester | Ask one question and see the tuples that lead to the answer |
+
+The two data screens and the check tester are not access controlled. They exist to make the POC
+transparent and would not ship in a real application.
+
 ## Check it
 
 ```sh
@@ -57,6 +69,7 @@ docker compose exec postgres psql -U postgres \
 - No login: the caller is whatever the `X-User` header says.
 - HR data lives in memory and resets on restart. Tuples persist in Postgres.
 - Grant management and the salary audit endpoint are open to every persona.
+- The data screens show raw HR data, including salary, to anyone.
 - OpenFGA runs without authentication or TLS.
 
 Re-running `npm run setup` creates a new store and points the app at it.

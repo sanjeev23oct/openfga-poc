@@ -42,6 +42,24 @@
   form.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-top: 12px; }
   .cols { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); }
   .ok { color: var(--good); } .err { color: var(--bad); }
+  nav { background: var(--panel); border-bottom: 1px solid var(--line); padding: 0 20px; display: flex; gap: 4px; overflow-x: auto; }
+  nav button { border: 0; border-bottom: 3px solid transparent; border-radius: 0; padding: 10px 14px; background: none; color: var(--quiet); white-space: nowrap; }
+  nav button.on { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+  .view[hidden] { display: none; }
+  .view { display: grid; gap: 20px; }
+  .view > *, .cols > * { min-width: 0; }
+  .banner { margin: 0; }
+  .where { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 999px; background: var(--accent-soft); margin-left: 6px; font-weight: 400; }
+  .grid { font: 12.5px/1.4 ui-monospace, Menlo, monospace; }
+  .grid th { position: sticky; top: 0; background: var(--panel); }
+  .tall { max-height: 460px; overflow: auto; }
+  .tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-bottom: 10px; }
+  .banner { background: var(--warn-soft); border-radius: 8px; padding: 10px 12px; }
+  .steps { display: grid; gap: 10px; margin-top: 12px; }
+  .step { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+  .step.hit { border-color: var(--good); }
+  .step small { color: var(--quiet); display: block; }
+  .verdict { font-size: 18px; font-weight: 600; margin: 12px 0 4px; }
 </style>
 </head>
 <body>
@@ -51,7 +69,15 @@
   <label>List strategy <select id="strategy"></select></label>
 </header>
 
+<nav id="tabs">
+  <button data-view="demo" class="on">Access demo</button>
+  <button data-view="hr">HR application data</button>
+  <button data-view="fga">OpenFGA data</button>
+  <button data-view="why">Check tester</button>
+</nav>
+
 <main>
+ <div class="view" id="view-demo">
   <section>
     <h2>Employees I can see</h2>
     <p class="hint" id="summary"></p>
@@ -102,6 +128,94 @@
       <pre id="tuples" hidden></pre>
     </section>
   </div>
+ </div>
+
+ <div class="view" id="view-hr" hidden>
+  <p class="banner">Everything the HR application itself stores. In this POC it is held in memory; in a real system it is the HR database. These are raw tables with no access control applied, so salary is visible to whoever opens this screen. Notice what is missing: there is no table of role grants here. Grants live only in OpenFGA.</p>
+  <section>
+    <h2>employee <span class="where">HR application</span></h2>
+    <p class="hint">One row per employee. <code>unit</code> and <code>department</code> are the two fields access depends on. The API sends <code>department</code> to OpenFGA with every check.</p>
+    <div class="tools"><label>Filter <input data-filter="hr-employees" placeholder="type to filter"></label></div>
+    <div class="scroll tall" id="hr-employees"></div>
+  </section>
+  <section>
+    <h2>org_unit <span class="where">HR application</span></h2>
+    <p class="hint">The organisation tree as the HR application knows it. Each row with a parent is also written to OpenFGA as one "tree link" tuple.</p>
+    <div class="tools"><label>Filter <input data-filter="hr-units" placeholder="type to filter"></label></div>
+    <div class="scroll tall" id="hr-units"></div>
+  </section>
+  <div class="cols">
+    <section>
+      <h2>department <span class="where">HR application</span></h2>
+      <p class="hint">Departments are plain values on the employee row. OpenFGA has no department objects.</p>
+      <div class="scroll" id="hr-departments"></div>
+    </section>
+    <section>
+      <h2>user <span class="where">HR application</span></h2>
+      <p class="hint">The demo logins. OpenFGA has no user table: a user exists there only when a tuple names them.</p>
+      <div class="scroll" id="hr-users"></div>
+    </section>
+  </div>
+ </div>
+
+ <div class="view" id="view-fga" hidden>
+  <p class="banner">Everything OpenFGA stores for this POC, read live through its API. Behind the API these are the <code>store</code>, <code>authorization_model</code>, <code>tuple</code> and <code>changelog</code> tables in Postgres. No employee names, departments or salaries are here.</p>
+  <section>
+    <h2>Store <span class="where">OpenFGA</span></h2>
+    <p class="hint">A store is one isolated set of models and tuples. This application uses one store.</p>
+    <div class="scroll" id="fga-store"></div>
+  </section>
+  <section>
+    <h2>Authorization model versions <span class="where">OpenFGA</span></h2>
+    <p class="hint">Each published model is kept as a new version. The application names the version it uses.</p>
+    <div class="scroll" id="fga-models"></div>
+  </section>
+  <div class="cols">
+    <section>
+      <h2>Model: the rules as text <span class="where">OpenFGA</span></h2>
+      <p class="hint">The model in use, converted back to its readable form.</p>
+      <pre id="fga-dsl" style="max-height:460px"></pre>
+    </section>
+    <section>
+      <h2>Model: one row per rule <span class="where">OpenFGA</span></h2>
+      <p class="hint">The same model as a table. Roles are assigned with tuples. Permissions are derived and are what the application checks.</p>
+      <div class="tools">
+        <label>Kind <select data-kind="fga-relations"><option value="">all</option><option>role</option><option>permission</option><option>link to parent</option><option>membership</option></select></label>
+        <label>Filter <input data-filter="fga-relations" placeholder="type to filter"></label>
+      </div>
+      <div class="scroll tall" id="fga-relations"></div>
+    </section>
+  </div>
+  <section>
+    <h2>Tuples: the facts <span class="where">OpenFGA</span></h2>
+    <p class="hint" id="fga-tuple-summary"></p>
+    <div class="tools">
+      <label>Kind <select data-kind="fga-tuples"><option value="">all</option><option>role grant</option><option>tree link</option><option>employee placement</option><option>group membership</option></select></label>
+      <label>Filter <input data-filter="fga-tuples" placeholder="for example anita or rohini"></label>
+    </div>
+    <div class="scroll tall" id="fga-tuples"></div>
+  </section>
+  <section>
+    <h2>Change log <span class="where">OpenFGA</span></h2>
+    <p class="hint">Every tuple write and delete since the store was created, oldest first. Grant, revoke or move something in the Access demo and it appears at the bottom.</p>
+    <div class="tools"><label>Filter <input data-filter="fga-changes" placeholder="type to filter"></label></div>
+    <div class="scroll tall" id="fga-changes"></div>
+  </section>
+ </div>
+
+ <div class="view" id="view-why" hidden>
+  <section>
+    <h2>Ask OpenFGA one question</h2>
+    <p class="hint">Pick a user, a permission and an employee. The answer comes from OpenFGA. The steps below it are rebuilt by this application from the stored tuples, to show which facts lead to that answer.</p>
+    <form class="row" id="why-form">
+      <label>User <select name="user" id="why-user"></select></label>
+      <label>Permission <select name="permission" id="why-permission"></select></label>
+      <label>Employee <select name="employee" id="why-employee"></select></label>
+      <button class="primary">Check</button>
+    </form>
+    <div id="why-result"></div>
+  </section>
+ </div>
 </main>
 
 <script>
@@ -176,6 +290,82 @@ async function refresh() {
   }
 }
 
+// ---- Explorer screens ----
+const tables = {};
+
+function drawTable(id) {
+  const { rows, filter = '', kind = '' } = tables[id];
+  const shown = rows.filter((r) =>
+    (!kind || r.kind === kind) &&
+    (!filter || Object.values(r).join(' ').toLowerCase().includes(filter.toLowerCase())));
+  const columns = rows.length ? Object.keys(rows[0]) : [];
+  $(id).innerHTML = `<table class="grid"><thead><tr>${columns.map((c) => `<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>${
+    shown.map((r) => `<tr>${columns.map((c) => `<td>${esc(r[c] ?? '')}</td>`).join('')}</tr>`).join('') ||
+    `<tr><td colspan="${columns.length || 1}" class="hidden">No rows match.</td></tr>`
+  }</tbody></table><p class="hint" style="margin:8px 0 0">${shown.length} of ${rows.length} rows</p>`;
+}
+
+function setTable(id, rows) {
+  tables[id] = { ...tables[id], rows };
+  drawTable(id);
+}
+
+async function loadHrData() {
+  const data = await api('/explorer/hr');
+  setTable('hr-employees', data.employees);
+  setTable('hr-units', data.units);
+  setTable('hr-departments', data.departments);
+  setTable('hr-users', data.users);
+}
+
+async function loadFgaData() {
+  const data = await api('/explorer/fga');
+  setTable('fga-store', data.store);
+  setTable('fga-models', data.models);
+  setTable('fga-relations', data.relations);
+  setTable('fga-tuples', data.tuples);
+  setTable('fga-changes', data.changes);
+  $('fga-dsl').textContent = data.dsl;
+  const count = (kind) => data.tuples.filter((t) => t.kind === kind).length;
+  $('fga-tuple-summary').textContent =
+    `${data.tuples.length} tuples in total: ${count('role grant')} role grants, ${count('tree link')} tree links, ` +
+    `${count('employee placement')} employee placements and ${count('group membership')} group memberships. ` +
+    'Read each row as: user is relation of object.';
+}
+
+async function runExplain(event) {
+  event?.preventDefault();
+  const form = new FormData($('why-form'));
+  const data = await api(`/explain?${new URLSearchParams(form)}`);
+  const steps = data.steps.map((s) => {
+    const hit = s.grants.some((g) => g.counts);
+    const grants = s.grants.map((g) => {
+      const reasons = [];
+      if (!g.givesPermission) reasons.push(`the ${g.role} role does not give this permission`);
+      if (!g.departmentOk) reasons.push(`limited to ${g.departments.join(', ')}, employee is in ${data.employee.department}`);
+      return `<div class="${g.counts ? 'ok' : 'err'}">${g.counts ? 'Counts' : 'Does not count'}: <code>${esc(g.tuple)}</code> (${esc(g.via)})${reasons.length ? `, because ${esc(reasons.join(' and '))}` : ''}</div>`;
+    }).join('') || '<div class="hidden">No grant for this user here.</div>';
+    return `<div class="step ${hit ? 'hit' : ''}"><strong>${esc(s.unitPath)}</strong> <code>${esc(s.unit)}</code><small>Reached through tuple: ${esc(s.reachedBy)}</small>${grants}</div>`;
+  }).join('');
+  $('why-result').innerHTML =
+    `<p class="verdict ${data.allowed ? 'ok' : 'err'}">${esc(data.question)} ${data.allowed ? 'Allowed' : 'Denied'}</p>` +
+    `<p class="hint">Employee ${esc(data.employee.name)} is in the ${esc(data.employee.department)} department. ` +
+    `Roles that give this permission: ${esc(data.rolesThatGivePermission.join(', '))}.` +
+    `${data.groups.length ? ` The user belongs to ${esc(data.groups.join(', '))}.` : ''}</p>` +
+    `<p class="hint">OpenFGA starts at the employee and walks up the tree. At each unit it looks for a grant to this user.</p>` +
+    `<div class="steps">${steps}</div>` +
+    (data.allowed === data.explained ? '' : '<p class="err">The rebuilt steps do not match OpenFGA\'s answer. Trust OpenFGA.</p>');
+}
+
+const loaders = { demo: () => refresh(), hr: loadHrData, fga: loadFgaData, why: () => runExplain() };
+
+function showView(name) {
+  for (const button of $('tabs').children) button.classList.toggle('on', button.dataset.view === name);
+  for (const view of document.querySelectorAll('.view')) view.hidden = view.id !== `view-${name}`;
+  history.replaceState(null, '', `#${name}`);
+  loaders[name]().catch((error) => say(error.message, false));
+}
+
 const options = (items, value, label) => items.map((i) => `<option value="${esc(value(i))}">${esc(label(i))}</option>`).join('');
 
 function fillMoveParents() {
@@ -202,12 +392,25 @@ async function init() {
   $('strategy').innerHTML = options(meta.strategies, (s) => s, (s) => s);
   $('grant-role').innerHTML = options(meta.roles, (r) => r, (r) => r);
   $('grant-departments').innerHTML = options(meta.departments, (d) => d, (d) => d);
+  $('why-user').innerHTML = options(meta.personas, (p) => p.id, (p) => p.label);
+  $('why-permission').innerHTML = options(meta.permissions, (x) => x, (x) => x);
+  $('why-employee').innerHTML = options(meta.employees, (e) => e.id, (e) => `${e.id} ${e.name}`);
   await refresh();
+  // A link such as /#fga opens that screen directly.
+  if (loaders[location.hash.slice(1)]) showView(location.hash.slice(1));
 }
 
 $('persona').onchange = () => { say(''); refresh(); };
 $('strategy').onchange = () => loadEmployees();
 $('move-unit').onchange = fillMoveParents;
+$('tabs').onclick = (event) => event.target.dataset.view && showView(event.target.dataset.view);
+$('why-form').onsubmit = (event) => runExplain(event).catch((error) => say(error.message, false));
+document.addEventListener('input', (event) => {
+  const id = event.target.dataset.filter ?? event.target.dataset.kind;
+  if (!id || !tables[id]) return;
+  tables[id][event.target.dataset.filter ? 'filter' : 'kind'] = event.target.value;
+  drawTable(id);
+});
 $('show-tuples').onclick = () => { $('tuples').hidden = !$('tuples').hidden; };
 
 $('employees').onclick = async (event) => {
