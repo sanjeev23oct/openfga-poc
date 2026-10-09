@@ -334,15 +334,16 @@ async function currentModel() {
 const conditionText = (condition) =>
   condition ? `${condition.name} ${JSON.stringify(condition.context ?? {})}` : '';
 
+const shortTime = (timestamp) => timestamp.slice(0, 19).replace('T', ' ');
+
+// One tuple in OpenFGA's own form (user, relation, object, condition), plus a sentence.
 function tupleRow(key, extra = {}) {
-  const [objectType, objectId] = key.object.split(':');
   return {
     in_plain_english: tupleEnglish(key),
     kind: tupleKind(key.relation),
-    object_type: objectType,
-    object_id: objectId,
-    relation: key.relation,
     user: key.user,
+    relation: key.relation,
+    object: key.object,
     condition: conditionText(key.condition),
     ...extra,
   };
@@ -395,13 +396,13 @@ app.get('/api/explorer/fga', async (req, res) => {
     })),
     dsl,
     relations,
-    tuples: tuples.map((t) => tupleRow(t.key, { written_at: t.timestamp })),
+    tuples: tuples.map((t) => tupleRow(t.key, { written_at: shortTime(t.timestamp) })),
     changes: changes.map((c, index) => ({
       '#': index + 1,
       ...tupleRow(c.tuple_key),
       in_plain_english: `${c.operation === 'TUPLE_OPERATION_WRITE' ? 'Added' : 'Removed'}: ${tupleEnglish(c.tuple_key)}`,
       operation: c.operation === 'TUPLE_OPERATION_WRITE' ? 'write' : 'delete',
-      at: c.timestamp,
+      at: shortTime(c.timestamp),
     })),
   });
 });

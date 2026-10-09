@@ -61,6 +61,12 @@
   .step small { color: var(--quiet); display: block; }
   .story { border-left: 4px solid var(--accent); background: var(--accent-soft); border-radius: 0 8px 8px 0; padding: 10px 14px; margin: 0 0 12px; font-size: 15px; }
   .story p { margin: 0 0 4px; } .story p:last-child { margin: 0; font-weight: 600; }
+  .fga-tuples { table-layout: auto; }
+  .fga-tuples td { white-space: normal; overflow-wrap: anywhere; font: 13px/1.4 ui-monospace, Menlo, monospace; }
+  .fga-tuples tr.vals td { border-bottom: 0; padding-bottom: 2px; }
+  .fga-tuples tr.say td { font: 14px/1.4 system-ui, sans-serif; color: var(--quiet); padding-top: 0; }
+  .fga-tuples tr.say td::before { content: "In English: "; font-weight: 600; }
+  .kind { font: 11px/1 system-ui, sans-serif; padding: 2px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--ink); margin-left: 8px; white-space: nowrap; }
   .entry { padding: 9px 4px; border-bottom: 1px solid var(--line); }
   .entry .say { font-size: 14.5px; }
   .entry .vals { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 4px; font: 12px/1.5 ui-monospace, Menlo, monospace; color: var(--quiet); }
@@ -298,7 +304,7 @@ async function loadGrants() {
 
 async function loadTuples() {
   const data = await api('/tuples');
-  $('tuple-count').textContent = `${data.count} tuples describe the whole organisation and every grant. There is no row per user per employee. Each one is shown below as a sentence, then in its stored form.`;
+  $('tuple-count').textContent = `${data.count} tuples describe the whole organisation and every grant. There is no row per user per employee. Each one is shown below as OpenFGA stores it, with the same fact in English underneath.`;
   setTable('tuples', data.tuples);
 }
 
@@ -320,6 +326,19 @@ function drawTable(id) {
     (!filter || Object.values(r).join(' ').toLowerCase().includes(filter.toLowerCase())));
   const count = `<p class="hint" style="margin:8px 0 0">${shown.length} of ${rows.length} rows</p>`;
   const columns = (rows.length ? Object.keys(rows[0]) : []).filter((c) => c !== 'in_plain_english');
+
+  // Tuples keep OpenFGA's own layout: user, relation, object and condition as columns.
+  // The sentence sits on the line under each tuple.
+  if (rows[0] && 'relation' in rows[0] && 'object' in rows[0]) {
+    const shownColumns = columns.filter((c) => c !== 'kind');
+    $(id).innerHTML = `<table class="fga-tuples"><thead><tr>${shownColumns.map((c) => `<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>${
+      shown.map((r) =>
+        `<tr class="vals">${shownColumns.map((c) => `<td>${esc(r[c] ?? '')}</td>`).join('')}</tr>` +
+        `<tr class="say"><td colspan="${shownColumns.length}">${esc(r.in_plain_english)}<span class="kind">${esc(r.kind)}</span></td></tr>`).join('') ||
+      `<tr><td colspan="${shownColumns.length}" class="hidden">No rows match.</td></tr>`
+    }</tbody></table>${count}`;
+    return;
+  }
 
   // Rows that carry a sentence are listed one under another: the sentence, then the stored
   // values as labelled items that wrap, so nothing needs sideways scrolling.
@@ -361,7 +380,7 @@ async function loadFgaData() {
   $('fga-tuple-summary').textContent =
     `${data.tuples.length} tuples in total: ${count('role grant')} role grants, ${count('tree link')} tree links, ` +
     `${count('employee placement')} employee placements and ${count('group membership')} group memberships. ` +
-    'Read each row as: user is relation of object.';
+    'Each tuple is shown as OpenFGA stores it, with the same fact in English underneath. Read a tuple as: user is relation of object.';
 }
 
 async function runExplain(event) {
