@@ -31,6 +31,9 @@ The UI has four screens:
 | OpenFGA data | Everything OpenFGA stores: the store, model versions, the model as text and as a table of rules, all tuples, and the change log |
 | Check tester | Ask one question and see the tuples that lead to the answer |
 
+Every screen explains itself in plain English for readers who are not technical: each tuple and
+each model rule is shown as a sentence, and each answer comes with a short story of why.
+
 The two data screens and the check tester are not access controlled. They exist to make the POC
 transparent and would not ship in a real application.
 

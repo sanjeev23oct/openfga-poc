@@ -59,6 +59,9 @@
   .step { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
   .step.hit { border-color: var(--good); }
   .step small { color: var(--quiet); display: block; }
+  .story { border-left: 4px solid var(--accent); background: var(--accent-soft); border-radius: 0 8px 8px 0; padding: 10px 14px; margin: 0 0 12px; font-size: 15px; }
+  .story p { margin: 0 0 4px; } .story p:last-child { margin: 0; font-weight: 600; }
+  .grid td.plain, .grid th.plain { white-space: normal; min-width: 300px; font: 14px/1.4 system-ui, sans-serif; }
   .verdict { font-size: 18px; font-weight: 600; margin: 12px 0 4px; }
 </style>
 </head>
@@ -81,6 +84,7 @@
   <section>
     <h2>Employees I can see</h2>
     <p class="hint" id="summary"></p>
+    <div class="story" id="story"></div>
     <div class="trace" id="trace"></div>
     <div class="scroll">
       <table>
@@ -159,7 +163,14 @@
  </div>
 
  <div class="view" id="view-fga" hidden>
-  <p class="banner">Everything OpenFGA stores for this POC, read live through its API. Behind the API these are the <code>store</code>, <code>authorization_model</code>, <code>tuple</code> and <code>changelog</code> tables in Postgres. No employee names, departments or salaries are here.</p>
+  <div class="story">
+    <p>OpenFGA is the service that decides who may see what. It keeps only three kinds of thing.</p>
+    <p>Rules: general statements, such as "an Admin of a zone is also Admin of every area in it".</p>
+    <p>Facts: specific statements, such as "Anita is Admin of North Zone" or "Delhi belongs to North Zone". OpenFGA calls each fact a tuple.</p>
+    <p>A history of every fact added or removed.</p>
+    <p>It does not keep a list of who can see which employee. It works that out from the rules and facts each time it is asked.</p>
+  </div>
+  <p class="banner">Each table below has an "In plain English" column first, followed by the technical columns. Everything is read live through OpenFGA's API. Behind the API these are the <code>store</code>, <code>authorization_model</code>, <code>tuple</code> and <code>changelog</code> tables in Postgres. No employee names, departments or salaries are here.</p>
   <section>
     <h2>Store <span class="where">OpenFGA</span></h2>
     <p class="hint">A store is one isolated set of models and tuples. This application uses one store.</p>
@@ -250,6 +261,7 @@ async function loadEmployees() {
   const data = await api(`/employees?strategy=${$('strategy').value}`);
   $('summary').textContent = `${data.employees.length} of ${data.total} employees visible, using the "${data.strategy}" strategy.`;
   showTrace(data.trace);
+  $('story').innerHTML = data.story.map((line) => `<p>${esc(line)}</p>`).join('');
   $('employees').innerHTML = data.employees.map((e) => `
     <tr>
       <td>${esc(e.id)}</td><td>${esc(e.name)}</td><td>${esc(e.department)}</td><td>${esc(e.unitPath)}</td>
@@ -293,14 +305,16 @@ async function refresh() {
 // ---- Explorer screens ----
 const tables = {};
 
+const plain = (column) => (column === 'in_plain_english' ? ' class="plain"' : '');
+
 function drawTable(id) {
   const { rows, filter = '', kind = '' } = tables[id];
   const shown = rows.filter((r) =>
     (!kind || r.kind === kind) &&
     (!filter || Object.values(r).join(' ').toLowerCase().includes(filter.toLowerCase())));
   const columns = rows.length ? Object.keys(rows[0]) : [];
-  $(id).innerHTML = `<table class="grid"><thead><tr>${columns.map((c) => `<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>${
-    shown.map((r) => `<tr>${columns.map((c) => `<td>${esc(r[c] ?? '')}</td>`).join('')}</tr>`).join('') ||
+  $(id).innerHTML = `<table class="grid"><thead><tr>${columns.map((c) => `<th${plain(c)}>${esc(c === 'in_plain_english' ? 'In plain English' : c)}</th>`).join('')}</tr></thead><tbody>${
+    shown.map((r) => `<tr>${columns.map((c) => `<td${plain(c)}>${esc(r[c] ?? '')}</td>`).join('')}</tr>`).join('') ||
     `<tr><td colspan="${columns.length || 1}" class="hidden">No rows match.</td></tr>`
   }</tbody></table><p class="hint" style="margin:8px 0 0">${shown.length} of ${rows.length} rows</p>`;
 }
@@ -348,7 +362,10 @@ async function runExplain(event) {
     return `<div class="step ${hit ? 'hit' : ''}"><strong>${esc(s.unitPath)}</strong> <code>${esc(s.unit)}</code><small>Reached through tuple: ${esc(s.reachedBy)}</small>${grants}</div>`;
   }).join('');
   $('why-result').innerHTML =
-    `<p class="verdict ${data.allowed ? 'ok' : 'err'}">${esc(data.question)} ${data.allowed ? 'Allowed' : 'Denied'}</p>` +
+    `<p class="verdict ${data.allowed ? 'ok' : 'err'}">${data.allowed ? 'Yes, allowed' : 'No, not allowed'}</p>` +
+    `<div class="story">${data.story.map((line) => `<p>${esc(line)}</p>`).join('')}</div>` +
+    `<h2 style="margin-top:18px">The technical detail</h2>` +
+    `<p class="hint">Question sent to OpenFGA: <code>${esc(data.question)}</code></p>` +
     `<p class="hint">Employee ${esc(data.employee.name)} is in the ${esc(data.employee.department)} department. ` +
     `Roles that give this permission: ${esc(data.rolesThatGivePermission.join(', '))}.` +
     `${data.groups.length ? ` The user belongs to ${esc(data.groups.join(', '))}.` : ''}</p>` +

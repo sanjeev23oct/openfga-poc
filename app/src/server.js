@@ -91,7 +91,13 @@ app.get('/api/employees', async (req, res) => {
   const visible = employees
     .filter((e) => permissions.get(e.id).can_view_basic)
     .map((e) => present(e, permissions.get(e.id)));
-  res.json({ strategy, total: employees.length, employees: visible, trace: req.trace.summary() });
+  res.json({
+    strategy,
+    total: employees.length,
+    employees: visible,
+    story: await personStory(req.user, visible.length),
+    trace: req.trace.summary(),
+  });
 });
 
 app.get('/api/employees/:id', async (req, res) => {
@@ -180,6 +186,113 @@ app.get('/api/tuples', async (req, res) => {
 
 const TREE_RELATIONS = ['country', 'zone', 'area', 'centre'];
 
+// ---- Plain-English wording for tuples, rules and answers, for readers who are not technical. ----
+
+const ROLE_LABEL = { admin: 'Admin', coordinator: 'Coordinator', salary_coordinator: 'Salary coordinator' };
+const PERMISSION_LABEL = {
+  can_view_basic: 'view basic details',
+  can_edit_basic: 'edit basic details',
+  can_view_salary: 'view salary',
+};
+const TYPE_LABEL = { country: 'country', zone: 'zone', area: 'area', centre: 'centre', sub_centre: 'sub-centre' };
+
+const capital = (word) => word[0].toUpperCase() + word.slice(1);
+const listText = (items, joiner = 'and') =>
+  items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} ${joiner} ${items.at(-1)}`;
+const departmentLabel = (code) => (code === 'hr' ? 'HR' : capital(code));
+
+// "centre:rohini" becomes "Rohini (centre)". Zones and the country already say what they are.
+function unitText(object) {
+  const unit = findUnit(object);
+  const type = object.split(':')[0];
+  if (!unit) return object;
+  return ['country', 'zone'].includes(type) ? unit.name : `${unit.name} (${TYPE_LABEL[type]})`;
+}
+
+// "user:anita" becomes "Anita"; "group:payroll-south#member" becomes "Everyone in the payroll-south group".
+function whoText(user) {
+  const [type, rest] = user.split(':');
+  return type === 'group' ? `Everyone in the ${rest.split('#')[0]} group` : capital(rest);
+}
+
+function departmentLimit(condition) {
+  const departments = condition?.context?.allowed_departments;
+  if (!departments?.length) return '';
+  return `, for the ${listText(departments.map(departmentLabel))} department${departments.length > 1 ? 's' : ''} only`;
+}
+
+function tupleEnglish(key) {
+  switch (tupleKind(key.relation)) {
+    case 'role grant':
+      return `${whoText(key.user)} is ${ROLE_LABEL[key.relation]} of ${unitText(key.object)}${departmentLimit(key.condition)}.`;
+    case 'employee placement':
+      return `${findEmployee(key.object.split(':')[1])?.name ?? key.object} works at ${unitText(key.user)}.`;
+    case 'group membership':
+      return `${whoText(key.user)} is a member of the ${key.object.split(':')[1]} group.`;
+    default:
+      return `${unitText(key.object)} belongs to ${unitText(key.user)}.`;
+  }
+}
+
+function ruleEnglish({ type, relation, kind, definition }) {
+  if (kind === 'role') {
+    const parent = definition.match(/ from (\w+)/)?.[1];
+    return (
+      `${ROLE_LABEL[relation]} of a ${TYPE_LABEL[type]}: anyone given that role on the ${TYPE_LABEL[type]} itself` +
+      (parent ? `, plus anyone who is ${ROLE_LABEL[relation]} of the ${TYPE_LABEL[parent]} above it.` : '.')
+    );
+  }
+  if (kind === 'permission') {
+    const action = PERMISSION_LABEL[relation];
+    if (type === 'employee') {
+      return `Whoever may ${action} for an employee's unit may ${action} for that employee.`;
+    }
+    return `On a ${TYPE_LABEL[type]}, ${listText(definition.split(' or ').map((r) => ROLE_LABEL[r]))} may ${action}.`;
+  }
+  if (kind === 'membership') return 'A group has members, and each member is a user.';
+  if (type === 'employee') return 'Each employee is placed in one unit: a zone, an area, a centre or a sub-centre.';
+  return `Each ${TYPE_LABEL[type]} belongs to one ${TYPE_LABEL[relation]}.`;
+}
+
+// What a role may and may not do, read from the model's permission rules.
+function roleSummary(role, relations) {
+  const rules = PERMISSIONS.map((p) => relations.find((r) => r.type === 'zone' && r.relation === p));
+  const can = rules.filter((r) => r.definition.split(' or ').includes(role)).map((r) => PERMISSION_LABEL[r.relation]);
+  const cannot = rules.filter((r) => !r.definition.split(' or ').includes(role)).map((r) => PERMISSION_LABEL[r.relation]);
+  return `${capital(indefinite(ROLE_LABEL[role]))} may ${listText(can)}${cannot.length ? `, but may not ${listText(cannot, 'or')}` : ''}.`;
+}
+
+const indefinite = (label) => `${/^[aeiou]/i.test(label) ? 'an' : 'a'} ${label}`;
+
+// The grants that apply to a user, directly or through a group.
+function grantsFor(user, tuples) {
+  const groups = tuples
+    .filter((t) => t.relation === 'member' && t.user === `user:${user}`)
+    .map((t) => `${t.object}#member`);
+  const grants = tuples.filter(
+    (t) => seed.ROLES.includes(t.relation) && (t.user === `user:${user}` || groups.includes(t.user)),
+  );
+  return { groups, grants };
+}
+
+// A short story for the signed-in person: what they hold and what that allows.
+async function personStory(user, visibleCount) {
+  const [{ relations }, stored] = await Promise.all([currentModel(), readAllTuples(fga)]);
+  const tuples = stored.map((t) => t.key);
+  const { groups, grants } = grantsFor(user, tuples);
+  const name = capital(user);
+  if (!grants.length) {
+    return [`${name} has not been given any role, so ${name} sees no employees.`];
+  }
+  const lines = groups.map((g) => `${name} is a member of the ${g.split(':')[1].split('#')[0]} group.`);
+  lines.push(...grants.map(tupleEnglish));
+  lines.push(...[...new Set(grants.map((g) => g.relation))].map((role) => roleSummary(role, relations)));
+  lines.push(
+    `A role on a unit also covers every unit below it. Together this lets ${name} see ${visibleCount} of ${employees.length} employees.`,
+  );
+  return lines;
+}
+
 function tupleKind(relation) {
   if (seed.ROLES.includes(relation)) return 'role grant';
   if (relation === 'unit') return 'employee placement';
@@ -204,7 +317,8 @@ function relationsFromDsl(dsl) {
     if (typeMatch) type = typeMatch[1];
     if (defineMatch) {
       const [, relation, definition] = defineMatch;
-      rows.push({ type, relation, kind: relationKind(relation), definition });
+      const row = { type, relation, kind: relationKind(relation), definition };
+      rows.push({ in_plain_english: ruleEnglish(row), ...row });
     }
   }
   return rows;
@@ -223,6 +337,7 @@ const conditionText = (condition) =>
 function tupleRow(key, extra = {}) {
   const [objectType, objectId] = key.object.split(':');
   return {
+    in_plain_english: tupleEnglish(key),
     kind: tupleKind(key.relation),
     object_type: objectType,
     object_id: objectId,
@@ -237,11 +352,15 @@ function tupleRow(key, extra = {}) {
 app.get('/api/explorer/hr', (req, res) => {
   res.json({
     employees: employees.map(({ salary, ...e }) => ({
+      in_plain_english: `${e.name} is ${indefinite(e.designation)} in ${departmentLabel(e.department)}, working at ${unitText(e.unit)}.`,
       ...e,
       annual_ctc: salary.annualCtc,
       bank_account: salary.bankAccount,
     })),
     units: units.map((u) => ({
+      in_plain_english: u.parent
+        ? `${u.name} is ${indefinite(TYPE_LABEL[u.type])} inside ${unitText(u.parent)}.`
+        : `${u.name} is the top of the organisation.`,
       object: seed.objectId(u),
       type: u.type,
       id: u.id,
@@ -279,8 +398,9 @@ app.get('/api/explorer/fga', async (req, res) => {
     tuples: tuples.map((t) => tupleRow(t.key, { written_at: t.timestamp })),
     changes: changes.map((c, index) => ({
       '#': index + 1,
-      operation: c.operation === 'TUPLE_OPERATION_WRITE' ? 'write' : 'delete',
       ...tupleRow(c.tuple_key),
+      in_plain_english: `${c.operation === 'TUPLE_OPERATION_WRITE' ? 'Added' : 'Removed'}: ${tupleEnglish(c.tuple_key)}`,
+      operation: c.operation === 'TUPLE_OPERATION_WRITE' ? 'write' : 'delete',
       at: c.timestamp,
     })),
   });
@@ -320,7 +440,7 @@ app.get('/api/explain', async (req, res) => {
         const departmentOk = !departments || departments.includes(employee.department);
         return {
           tuple: text(t),
-          via: t.user.startsWith('group:') ? `member of ${t.user.split('#')[0]}` : 'direct grant',
+          via: t.user.startsWith('group:') ? `member of the ${t.user.split(':')[1].split('#')[0]} group` : 'direct grant',
           role: t.relation,
           givesPermission,
           departments: departments ?? [],
@@ -332,8 +452,44 @@ app.get('/api/explain', async (req, res) => {
     link = tuples.find((t) => t.object === unit && TREE_RELATIONS.includes(t.relation));
   }
 
+  // The same answer as a short story in plain English.
+  const name = capital(user);
+  const action = PERMISSION_LABEL[permission];
+  const winning = steps.findIndex((s) => s.grants.some((g) => g.counts));
+  const walked = steps.slice(0, winning < 0 ? steps.length : winning + 1).map((s) => unitText(s.unit));
+  const story = [
+    `${employee.name} works at ${walked[0]}` +
+      walked.slice(1).map((u) => `, which is part of ${u}`).join('') + '.',
+  ];
+  if (winning >= 0) {
+    const grant = steps[winning].grants.find((g) => g.counts);
+    const unit = unitText(steps[winning].unit);
+    story.push(
+      grant.via === 'direct grant'
+        ? `${name} is ${ROLE_LABEL[grant.role]} of ${unit}.`
+        : `${name} is a ${grant.via}, and everyone in that group is ${ROLE_LABEL[grant.role]} of ${unit}.`,
+      `${capital(indefinite(ROLE_LABEL[grant.role]))} may ${action}, and a role on a unit covers everything below it.`,
+      `So yes, ${name} may ${action} for ${employee.name}.`,
+    );
+  } else {
+    const misses = steps.flatMap((s) => s.grants.map((g) => ({ ...g, unit: unitText(s.unit) })));
+    for (const miss of misses) {
+      const why = [];
+      if (!miss.givesPermission) why.push(`${indefinite(ROLE_LABEL[miss.role])} may not ${action}`);
+      if (!miss.departmentOk) {
+        why.push(
+          `that role is limited to ${listText(miss.departments.map(departmentLabel))} and ${employee.name} is in ${departmentLabel(employee.department)}`,
+        );
+      }
+      story.push(`${name} is ${ROLE_LABEL[miss.role]} of ${miss.unit}, but ${listText(why)}.`);
+    }
+    if (!misses.length) story.push(`${name} has not been given any role on ${listText(walked, 'or')}.`);
+    story.push(`So no, ${name} may not ${action} for ${employee.name}.`);
+  }
+
   res.json({
     allowed,
+    story,
     question: `Can user:${user} ${permission} employee:${employee.id}?`,
     employee: { id: employee.id, name: employee.name, department: employee.department },
     rolesThatGivePermission: roles,
