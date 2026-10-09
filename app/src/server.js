@@ -179,7 +179,7 @@ app.post('/api/units/move', async (req, res) => {
 
 app.get('/api/tuples', async (req, res) => {
   const tuples = await readAllTuples(fga);
-  res.json({ count: tuples.length, tuples: tuples.map((t) => t.key) });
+  res.json({ count: tuples.length, tuples: tuples.map((t) => tupleRow(t.key)) });
 });
 
 // ---- Explorer: raw views of everything the app and OpenFGA store. Not access controlled. ----

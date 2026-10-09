@@ -129,7 +129,13 @@
       <h2 style="margin-top:24px">What OpenFGA stores</h2>
       <p class="hint" id="tuple-count"></p>
       <button class="link" id="show-tuples">Show all tuples</button>
-      <pre id="tuples" hidden></pre>
+      <div id="tuples-panel" hidden>
+        <div class="tools" style="margin-top:10px">
+          <label>Kind <select data-kind="tuples"><option value="">all</option><option>role grant</option><option>tree link</option><option>employee placement</option><option>group membership</option></select></label>
+          <label>Filter <input data-filter="tuples" placeholder="for example anita or rohini"></label>
+        </div>
+        <div class="scroll tall" id="tuples"></div>
+      </div>
     </section>
   </div>
  </div>
@@ -288,10 +294,8 @@ async function loadGrants() {
 
 async function loadTuples() {
   const data = await api('/tuples');
-  $('tuple-count').textContent = `${data.count} tuples describe the whole organisation and every grant. There is no row per user per employee.`;
-  $('tuples').textContent = data.tuples
-    .map((t) => `${t.object}  #${t.relation}  @${t.user}` + (t.condition ? `  [${t.condition.name} ${JSON.stringify(t.condition.context)}]` : ''))
-    .join('\n');
+  $('tuple-count').textContent = `${data.count} tuples describe the whole organisation and every grant. There is no row per user per employee. Each one is shown below as a sentence, then in its stored form.`;
+  setTable('tuples', data.tuples);
 }
 
 async function refresh() {
@@ -428,7 +432,7 @@ document.addEventListener('input', (event) => {
   tables[id][event.target.dataset.filter ? 'filter' : 'kind'] = event.target.value;
   drawTable(id);
 });
-$('show-tuples').onclick = () => { $('tuples').hidden = !$('tuples').hidden; };
+$('show-tuples').onclick = () => { $('tuples-panel').hidden = !$('tuples-panel').hidden; };
 
 $('employees').onclick = async (event) => {
   const { edit, current, audit } = event.target.dataset;
