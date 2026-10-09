@@ -7,12 +7,12 @@
 <style>
   :root {
     --bg: #f6f7f9; --panel: #fff; --ink: #1c2330; --quiet: #5d6878; --line: #dfe3ea;
-    --accent: #2456c9; --accent-soft: #e8eefc; --good: #1d7a46; --bad: #b3261e; --warn-soft: #fdf3dc;
+    --accent: #2456c9; --accent-soft: #e8eefc; --db: #b45309; --db-soft: #fdf1e0; --good: #1d7a46; --bad: #b3261e; --warn-soft: #fdf3dc;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #14171c; --panel: #1c2027; --ink: #e7eaf0; --quiet: #9aa4b5; --line: #2e3440;
-      --accent: #7aa2ff; --accent-soft: #232c44; --good: #5fc98c; --bad: #ff8a80; --warn-soft: #3a3220;
+      --accent: #7aa2ff; --accent-soft: #232c44; --db: #f0a94e; --db-soft: #33281a; --good: #5fc98c; --bad: #ff8a80; --warn-soft: #3a3220;
     }
   }
   * { box-sizing: border-box; }
@@ -61,6 +61,32 @@
   .step small { color: var(--quiet); display: block; }
   .story { border-left: 4px solid var(--accent); background: var(--accent-soft); border-radius: 0 8px 8px 0; padding: 10px 14px; margin: 0 0 12px; font-size: 15px; }
   .story p { margin: 0 0 4px; } .story p:last-child { margin: 0; font-weight: 600; }
+  .ways { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); }
+  .ways > * { min-width: 0; }
+  .way { border-top: 4px solid var(--line); }
+  .way.good { border-top-color: var(--good); } .way.bad { border-top-color: var(--bad); }
+  .way h2 { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .tagline { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); }
+  .tagline.none { background: var(--db-soft); }
+  .tagline.good { background: none; color: var(--good); border: 1px solid var(--good); }
+  .tagline.bad { background: none; color: var(--bad); border: 1px solid var(--bad); }
+  .flow { display: grid; gap: 6px; margin: 12px 0; }
+  .flow .stage { display: grid; grid-template-columns: 96px 1fr; gap: 10px; align-items: center; }
+  .flow .sys { font-size: 11.5px; font-weight: 600; text-align: center; padding: 3px 6px; border-radius: 6px; }
+  .sys.database { background: var(--db-soft); color: var(--db); }
+  .sys.openfga { background: var(--accent-soft); color: var(--accent); }
+  .sys.application { background: var(--line); }
+  .flow .what { font-size: 13.5px; }
+  .meter { height: 8px; border-radius: 4px; background: var(--line); margin-top: 3px; overflow: hidden; }
+  .meter i { display: block; height: 100%; border-radius: 4px; }
+  .meter.database i { background: var(--db); } .meter.openfga i { background: var(--accent); } .meter.application i { background: var(--quiet); }
+  .result { background: var(--bg); border-radius: 8px; padding: 10px 12px; margin-top: 10px; }
+  .result ol { margin: 6px 0 0; padding-left: 20px; } .result li { margin-bottom: 2px; }
+  .result .gap { color: var(--bad); font-style: italic; }
+  .mini td, .mini th { padding: 3px 10px 3px 0; border: 0; font-size: 13px; }
+  .compare td, .compare th { white-space: normal; vertical-align: middle; }
+  .compare .barcell { min-width: 150px; }
+  .compare .num { white-space: nowrap; }
   .fga-tuples { table-layout: auto; }
   .fga-tuples td { white-space: normal; overflow-wrap: anywhere; font: 13px/1.4 ui-monospace, Menlo, monospace; }
   .fga-tuples tr.vals td { border-bottom: 0; padding-bottom: 2px; }
@@ -86,6 +112,7 @@
   <button data-view="demo" class="on">Access demo</button>
   <button data-view="hr">HR application data</button>
   <button data-view="fga">OpenFGA data</button>
+  <button data-view="reports">Filters and reports</button>
   <button data-view="why">Check tester</button>
 </nav>
 
@@ -228,6 +255,32 @@
     <div class="tools"><label>Filter <input data-filter="fga-changes" placeholder="type to filter"></label></div>
     <div class="scroll tall" id="fga-changes"></div>
   </section>
+ </div>
+
+ <div class="view" id="view-reports" hidden>
+  <div class="story">
+    <p>A list screen has to answer two questions at once: which employees match my filters, and which of those may I see?</p>
+    <p>The filters, sorting and paging are done by the HR database. The access rules are held by OpenFGA. Neither one can answer both questions alone, so the application has to combine them.</p>
+    <p>Below, the same request is run four ways. Three use OpenFGA and differ in which system goes first. The fourth uses no OpenFGA: grants are ordinary SQL tables.</p>
+    <p>Change the filters or the signed-in person and watch what each way has to fetch.</p>
+  </div>
+  <section>
+    <h2>The request</h2>
+    <p class="hint" id="reports-who"></p>
+    <form class="row" id="reports-form" style="margin-top:0">
+      <label>Department <select name="department" id="reports-department"></select></label>
+      <label>Name or designation contains <input name="search" placeholder="for example manager" size="18"></label>
+      <label>Sort by <select name="sort"><option>name</option><option>id</option><option>department</option><option>designation</option></select></label>
+      <label>Rows per page <select name="pageSize"><option>3</option><option selected>5</option><option>10</option></select></label>
+      <label>Page <select name="page"><option>1</option><option>2</option><option>3</option></select></label>
+    </form>
+  </section>
+  <section>
+    <h2>What each way cost for this request</h2>
+    <p class="hint">Bars are drawn against the 25 employees in the HR database. The last column is an estimate for a company of 10,000, not a measurement. Times are from a single run on tiny data, and the SQL-only way runs inside the application with no network hop, so compare the counts, not the milliseconds.</p>
+    <div class="scroll" id="reports-compare"></div>
+  </section>
+  <div class="ways" id="reports-ways"></div>
  </div>
 
  <div class="view" id="view-why" hidden>
@@ -410,9 +463,80 @@ async function runExplain(event) {
     (data.allowed === data.explained ? '' : '<p class="err">The rebuilt steps do not match OpenFGA\'s answer. Trust OpenFGA.</p>');
 }
 
-const loaders = { demo: () => refresh(), hr: loadHrData, fga: loadFgaData, why: () => runExplain() };
+// ---- Filters and reports ----
+const SYSTEM = { database: 'HR database', openfga: 'OpenFGA', application: 'Application' };
+
+function wayProblems(way, truth) {
+  const problems = [];
+  if (!way.pageCorrect) problems.push(`shows ${way.page.length} row(s) where the right page has ${truth.page.length}`);
+  if (!way.totalCorrect) problems.push(`says ${way.total} results when the user may see ${truth.total}`);
+  if (!way.reportCorrect) problems.push('the report counts employees this user may not see');
+  return problems;
+}
+
+function drawWay(way, truth, total, request) {
+  const problems = wayProblems(way, truth);
+  const stages = way.steps.map((s) => `
+    <div class="stage">
+      <span class="sys ${s.where}">${SYSTEM[s.where]}</span>
+      <div><div class="what">${esc(s.text)}: <strong>${s.count}</strong></div>
+      <div class="meter ${s.where}"><i style="width:${Math.min(100, (s.count / total) * 100)}%"></i></div></div>
+    </div>`).join('');
+  const rows = way.page.map((r) => `<li>${esc(r.name)} <span class="hidden">${esc(r.department)}, ${esc(r.unitPath)}</span></li>`).join('');
+  const missing = Math.max(0, truth.page.length - way.page.length);
+  const report = way.report.map((r) => `<tr><td>${esc(r.department)}</td><td class="num">${r.employees}</td></tr>`).join('');
+  return `<section class="way ${problems.length ? 'bad' : 'good'}">
+    <h2>${esc(way.title)}
+      <span class="tagline ${way.engine === 'OpenFGA' ? '' : 'none'}">${esc(way.engine)}</span>
+      <span class="tagline ${problems.length ? 'bad' : 'good'}">${problems.length ? 'Wrong answer' : 'Correct'}</span></h2>
+    <p class="hint">${esc(way.idea)}</p>
+    <div class="flow">${stages}</div>
+    ${problems.length ? `<p class="err">Problem: ${esc(problems.join('; '))}.</p>` : ''}
+    <div class="result">
+      <strong>Page ${request.page}: ${way.page.length} row(s), "${way.total} results in total"</strong>
+      <ol>${rows}${missing ? `<li class="gap">${missing} row(s) missing from this page</li>` : ''}</ol>
+      ${way.page.length || missing ? '' : '<p class="hidden" style="margin:6px 0 0">No rows.</p>'}
+    </div>
+    <div class="result">
+      <strong>Report: employees by department</strong>
+      <table class="mini"><tbody>${report || '<tr><td class="hidden">Nothing to report.</td></tr>'}</tbody></table>
+    </div>
+    <details style="margin-top:10px"><summary>SQL sent to the HR database (${way.sql.length} queries)</summary><pre>${esc(way.sql.join('\n\n'))}</pre></details>
+  </section>`;
+}
+
+function drawCompare(results, total) {
+  const bar = (value, max, kind) => `<div class="num">${value}</div><div class="meter ${kind}"><i style="width:${max ? Math.min(100, (value / max) * 100) : 0}%"></i></div>`;
+  const maxChecks = Math.max(1, ...results.map((r) => r.metrics.fgaChecks));
+  const maxCalls = Math.max(1, ...results.map((r) => r.metrics.fgaCalls));
+  $('reports-compare').innerHTML = `<table class="compare"><thead><tr>
+    <th>Way</th><th>Employee records pulled into the application</th><th>Employees checked one by one in OpenFGA</th>
+    <th>Calls to OpenFGA</th><th>Time</th><th>Answer</th><th>At 10,000 employees</th></tr></thead><tbody>${
+    results.map((r) => `<tr>
+      <td><strong>${esc(r.title)}</strong><br><span class="hidden">${esc(r.engine)}</span></td>
+      <td class="barcell">${bar(r.metrics.employeeRows, total, 'database')}</td>
+      <td class="barcell">${bar(r.metrics.fgaChecks, maxChecks, 'openfga')}</td>
+      <td class="barcell">${bar(r.metrics.fgaCalls, maxCalls, 'openfga')}</td>
+      <td class="num">${r.metrics.ms} ms</td>
+      <td class="${r.pageCorrect && r.totalCorrect && r.reportCorrect ? 'ok' : 'err'}">${r.pageCorrect && r.totalCorrect && r.reportCorrect ? 'Correct' : 'Wrong'}</td>
+      <td>about ${r.atTenThousand.employeeRows.toLocaleString('en-IN')} records pulled, ${r.atTenThousand.fgaChecks.toLocaleString('en-IN')} checked</td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+async function loadReports() {
+  const data = await api(`/reports?${new URLSearchParams(new FormData($('reports-form')))}`);
+  const truth = data.results.find((r) => r.key === 'pull-all-then-check');
+  $('reports-who').textContent = `${data.story[0]} Out of ${data.totalEmployees} employees, ${truth.total} match these filters and are visible to this person.`;
+  drawCompare(data.results, data.totalEmployees);
+  $('reports-ways').innerHTML = data.results.map((way) => drawWay(way, truth, data.totalEmployees, data.request)).join('');
+}
+
+const loaders = { demo: () => refresh(), hr: loadHrData, fga: loadFgaData, why: () => runExplain(), reports: loadReports };
+
+let activeView = 'demo';
 
 function showView(name) {
+  activeView = name;
   for (const button of $('tabs').children) button.classList.toggle('on', button.dataset.view === name);
   for (const view of document.querySelectorAll('.view')) view.hidden = view.id !== `view-${name}`;
   history.replaceState(null, '', `#${name}`);
@@ -445,6 +569,7 @@ async function init() {
   $('strategy').innerHTML = options(meta.strategies, (s) => s, (s) => s);
   $('grant-role').innerHTML = options(meta.roles, (r) => r, (r) => r);
   $('grant-departments').innerHTML = options(meta.departments, (d) => d, (d) => d);
+  $('reports-department').innerHTML = '<option value="">all</option>' + options(meta.departments, (d) => d, (d) => d);
   $('why-user').innerHTML = options(meta.personas, (p) => p.id, (p) => p.label);
   $('why-permission').innerHTML = options(meta.permissions, (x) => x, (x) => x);
   $('why-employee').innerHTML = options(meta.employees, (e) => e.id, (e) => `${e.id} ${e.name}`);
@@ -453,7 +578,9 @@ async function init() {
   if (loaders[location.hash.slice(1)]) showView(location.hash.slice(1));
 }
 
-$('persona').onchange = () => { say(''); refresh(); };
+$('persona').onchange = () => { say(''); showView(activeView); };
+$('reports-form').oninput = () => loadReports().catch((error) => say(error.message, false));
+$('reports-form').onsubmit = (event) => event.preventDefault();
 $('strategy').onchange = () => loadEmployees();
 $('move-unit').onchange = fillMoveParents;
 $('tabs').onclick = (event) => event.target.dataset.view && showView(event.target.dataset.view);

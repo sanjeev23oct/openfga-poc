@@ -11,6 +11,21 @@ let the HR database do the filtering, sorting, paging and totals. The rest of th
 why, what the other options cost, and how a custom implementation without OpenFGA would do the
 same job.
 
+## See it running
+
+The app's "Filters and reports" screen runs one filtered, sorted, paged list and one report four
+ways against live data, and shows what each way fetched and whether its answer was right:
+
+| Way in the app | What this file calls it |
+| --- | --- |
+| Page first, then check | batch-check applied to one page; the short-page and wrong-total problem |
+| Pull everything, then check | batch-check applied to every matching row |
+| Ask for units first, then query | list-units |
+| SQL tables only | The custom implementation |
+
+Code: [`app/src/reports.js`](../app/src/reports.js). Employee data and the SQL-only grant tables
+sit in an in-memory SQLite database, rebuilt from the current OpenFGA tuples on each request.
+
 ## The example screen
 
 > Employees in Finance, sorted by name, 50 per page, page 3, for the logged-in user.

@@ -17,6 +17,7 @@ import {
   usersWithPermission,
 } from './fga.js';
 import * as seed from './org.js';
+import { buildDatabase, compareApproaches } from './reports.js';
 
 const PORT = process.env.PORT ?? 4000;
 const storeConfig = loadStoreConfig();
@@ -499,6 +500,34 @@ app.get('/api/explain', async (req, res) => {
     explained: steps.some((s) => s.grants.some((g) => g.counts)),
     trace: req.trace.summary(),
   });
+});
+
+// Runs the same filtered list and report four ways and reports what each one cost.
+app.get('/api/reports', async (req, res) => {
+  const [{ relations }, stored] = await Promise.all([currentModel(), readAllTuples(fga)]);
+  const rolePermissions = relations
+    .filter((r) => r.type === 'zone' && r.kind === 'permission')
+    .flatMap((r) => r.definition.split(' or ').map((role) => ({ role, permission: r.relation })));
+  // Rebuilt on every request so it always matches the current grants and tree.
+  const db = buildDatabase({
+    employees,
+    tuples: stored.map((t) => t.key),
+    roles: seed.ROLES,
+    rolePermissions,
+  });
+  const comparison = await compareApproaches({
+    db,
+    fga,
+    user: req.user,
+    departments: seed.DEPARTMENTS,
+    request: req.query,
+    employeeCount: employees.length,
+  });
+  db.close();
+  for (const result of comparison.results) {
+    result.page = result.page.map((row) => ({ ...row, unitPath: unitPath(row.unit) }));
+  }
+  res.json({ ...comparison, user: req.user, totalEmployees: employees.length, story: await personStory(req.user, comparison.results[1].total) });
 });
 
 app.use((err, req, res, next) => {

@@ -22,13 +22,14 @@ npm start                       # API and UI on http://localhost:4000
 
 Open http://localhost:4000, pick a persona, and compare what each one sees.
 
-The UI has four screens:
+The UI has five screens:
 
 | Screen | What it shows |
 | --- | --- |
 | Access demo | What the selected persona can see and edit; grant, revoke and move a unit |
 | HR application data | The raw tables the HR application holds: employees, org units, departments, users |
 | OpenFGA data | Everything OpenFGA stores: the store, model versions, the model as text and as a table of rules, all tuples, and the change log |
+| Filters and reports | One filtered, sorted, paged list and one report, run four ways: three with OpenFGA and one with SQL tables only, showing what each fetches and whether the answer is right |
 | Check tester | Ask one question and see the tuples that lead to the answer |
 
 Every screen explains itself in plain English for readers who are not technical: each tuple and
@@ -87,6 +88,7 @@ docker compose exec postgres psql -U postgres \
 | `app/src/org.js` | Seed HR data: units, employees, grants, personas |
 | `app/src/fga.js` | OpenFGA calls: Check, BatchCheck, ListObjects, ListUsers |
 | `app/src/server.js` | HR API that enforces the permissions and masks salary |
+| `app/src/reports.js` | The four ways of running a filtered list and report, with cost counters |
 | `app/public/index.html` | UI: switch persona, edit, grant, revoke, move a unit |
 | `app/scripts/scenarios.js` | End-to-end scenario run |
 
