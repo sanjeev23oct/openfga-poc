@@ -1,0 +1,9 @@
+# Render Blueprint: one free web service built from the Dockerfile.
+# OpenFGA runs inside the same container with an in-memory store.
+services:
+  - type: web
+    name: openfga-poc
+    runtime: docker
+    plan: free
+    region: singapore
+    healthCheckPath: /

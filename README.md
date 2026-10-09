@@ -34,6 +34,29 @@ The UI has four screens:
 The two data screens and the check tester are not access controlled. They exist to make the POC
 transparent and would not ship in a real application.
 
+## Deploy a free public demo
+
+The `Dockerfile` builds one container holding both OpenFGA and the app. OpenFGA uses its in-memory
+store, so no database is needed and the demo resets to the seed data on every restart.
+
+On [Render](https://render.com) (free plan, no card):
+
+1. Sign in with GitHub.
+2. New, then Blueprint, then pick this repository. Render reads `render.yaml`.
+3. Apply. The first build takes a few minutes, then the app is at the `onrender.com` URL shown.
+
+The free plan sleeps after 15 minutes without traffic and takes about a minute to wake.
+
+Try the same container locally:
+
+```sh
+docker build -t openfga-poc-single .
+docker run --rm -p 4100:4000 openfga-poc-single     # http://localhost:4100
+```
+
+A public copy has no login: any visitor can pick any persona, change grants and open the data
+screens. The data is made up, and a restart restores it.
+
 ## Check it
 
 ```sh
