@@ -59,6 +59,8 @@
   .db tr.mark td { background: var(--hit-soft); }
   .block { margin-top: 16px; }
   .kw { color: var(--fga); font-weight: 600; } .cm { color: var(--quiet); }
+  .card.pol { border-top-color: var(--hit); } .pol h3 { color: var(--hit); }
+  .three { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
   .verdict { border-left: 4px solid var(--fga); background: var(--panel); padding: 14px 18px; border-radius: 0 10px 10px 0; margin-top: 14px; }
   .verdict.sql { border-left-color: var(--sql); }
 </style>
@@ -224,6 +226,77 @@ AND (ua.centre_id IS NULL OR ua.centre_id = e.centre_id)</code></pre>
 </div>
 <div class="verdict">
   <strong>OpenFGA</strong> when many applications share the same zones, areas and centres, or when some need access to individual items, such as workflow approvals, health records or devices. The cost is one more service to run, a sync step from each application, and extra work for list screens.
+</div>
+
+<h2>7. Where "policy" fits</h2>
+<p>There are three ways to express who may do what. Real systems mix them. A policy is a rule written as code that looks at facts about the user, the record and the request, and answers allow or deny.</p>
+<div class="three">
+  <div class="card sql">
+    <h3>ROLES</h3>
+    <p><strong>Access comes from a job title.</strong></p>
+    <p>"Admins can edit employees."</p>
+    <p class="note">Your <code>role</code> and <code>role_permission</code> tables.</p>
+  </div>
+  <div class="card fga">
+    <h3>RELATIONSHIPS</h3>
+    <p><strong>Access comes from a link between a user and a thing.</strong></p>
+    <p>"Deepak is admin of Delhi, and Rohini is in Delhi."</p>
+    <p class="note">OpenFGA tuples, or your scope columns.</p>
+  </div>
+  <div class="card pol">
+    <h3>POLICIES</h3>
+    <p><strong>Access comes from a rule over attributes.</strong></p>
+    <p>"Salary is visible only on the office network, and only for grades below 10."</p>
+    <p class="note">Policy engines such as OPA and Cedar.</p>
+  </div>
+</div>
+
+<div class="card pol block">
+  <h3>WHAT A POLICY LOOKS LIKE</h3>
+  <p>An illustrative rule in the style of the Cedar policy language. It is not part of the POC.</p>
+<pre><code>permit (
+  principal,
+  action == Action::"viewSalary",
+  resource
+)
+when {
+  principal.role == "salary_coordinator" &&
+  principal.zone == resource.zone &&
+  resource.grade &lt; 10 &&
+  context.network == "office"
+};</code></pre>
+  <p style="margin-top:12px">A policy engine holds the rules but usually no data. On every request the application must hand it the facts: the user's role and zone, the employee's zone and grade, the network. OpenFGA is the opposite: it holds the facts (tuples) and the rules are simple.</p>
+</div>
+
+<div class="scroll block">
+<table>
+  <thead><tr><th>Question</th><th>Roles and relationships</th><th>Policies</th></tr></thead>
+  <tbody>
+    <tr><td>Best at</td><td>Who holds what, where, and through which hierarchy or group</td><td>Conditions on attributes: grade, amount, time, network, status</td></tr>
+    <tr><td>Where the facts live</td><td>Stored: tuples or table rows</td><td>Supplied by the application on each request</td></tr>
+    <tr><td>"Who can see this record?"</td><td>Can be answered from the stored facts</td><td>Hard: the engine does not know all the users</td></tr>
+    <tr><td>Deny rules and exceptions</td><td>Awkward</td><td>Natural</td></tr>
+    <tr><td>Who changes it</td><td>Admins add grants; developers change the model</td><td>Developers or security staff, reviewed like code</td></tr>
+    <tr><td>Lists and reports</td><td>Extra work in OpenFGA; one query in SQL</td><td>Also extra work</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="two block">
+  <div class="card">
+    <h3>YOU ALREADY HAVE SMALL POLICIES</h3>
+    <p><strong>In OpenFGA:</strong> the department limit is a condition, which is a one-line policy attached to a grant.</p>
+<pre><code>condition in_department(allowed_departments: list&lt;string&gt;,
+                        employee_department: string) {
+  employee_department in allowed_departments
+}</code></pre>
+    <p style="margin-top:10px"><strong>In SQL:</strong> the same policy is a line in the query: <code>ua.department = e.department</code>.</p>
+  </div>
+  <div class="card">
+    <h3>WHAT TO DO ABOUT IT</h3>
+    <p><strong>Now:</strong> no separate policy engine. Zones, areas, centres and roles are relationship data, and the few attribute rules fit in OpenFGA conditions or SQL.</p>
+    <p><strong>Later:</strong> consider one if attribute rules multiply, for example approval limits by amount, access by shift or network, or configuration rules for switches and routers.</p>
+  </div>
 </div>
 
 <p class="note" style="margin-top:28px">Details and tested examples: <a href="change-walkthrough.md">change-walkthrough.md</a> and <a href="list-queries-comparison.md">list-queries-comparison.md</a>.</p>
