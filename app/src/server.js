@@ -262,7 +262,7 @@ function roleSummary(role, relations) {
   return `${capital(indefinite(ROLE_LABEL[role]))} may ${listText(can)}${cannot.length ? `, but may not ${listText(cannot, 'or')}` : ''}.`;
 }
 
-const indefinite = (label) => `${/^[aeiou]/i.test(label) ? 'an' : 'a'} ${label}`;
+const indefinite = (label) => `${/^([aeiou]|hr\b)/i.test(label) ? 'an' : 'a'} ${label}`;
 
 // The grants that apply to a user, directly or through a group.
 function grantsFor(user, tuples) {

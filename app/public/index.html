@@ -61,7 +61,11 @@
   .step small { color: var(--quiet); display: block; }
   .story { border-left: 4px solid var(--accent); background: var(--accent-soft); border-radius: 0 8px 8px 0; padding: 10px 14px; margin: 0 0 12px; font-size: 15px; }
   .story p { margin: 0 0 4px; } .story p:last-child { margin: 0; font-weight: 600; }
-  .grid td.plain, .grid th.plain { white-space: normal; min-width: 300px; font: 14px/1.4 system-ui, sans-serif; }
+  .entry { padding: 9px 4px; border-bottom: 1px solid var(--line); }
+  .entry .say { font-size: 14.5px; }
+  .entry .vals { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 4px; font: 12px/1.5 ui-monospace, Menlo, monospace; color: var(--quiet); }
+  .entry .vals b { font-weight: 600; margin-right: 5px; }
+  .entry .vals span { overflow-wrap: anywhere; }
   .verdict { font-size: 18px; font-weight: 600; margin: 12px 0 4px; }
 </style>
 </head>
@@ -176,7 +180,7 @@
     <p>A history of every fact added or removed.</p>
     <p>It does not keep a list of who can see which employee. It works that out from the rules and facts each time it is asked.</p>
   </div>
-  <p class="banner">Each table below has an "In plain English" column first, followed by the technical columns. Everything is read live through OpenFGA's API. Behind the API these are the <code>store</code>, <code>authorization_model</code>, <code>tuple</code> and <code>changelog</code> tables in Postgres. No employee names, departments or salaries are here.</p>
+  <p class="banner">In each table below, every entry is a sentence in plain English with its stored values on the line beneath. Everything is read live through OpenFGA's API. Behind the API these are the <code>store</code>, <code>authorization_model</code>, <code>tuple</code> and <code>changelog</code> tables in Postgres. No employee names, departments or salaries are here.</p>
   <section>
     <h2>Store <span class="where">OpenFGA</span></h2>
     <p class="hint">A store is one isolated set of models and tuples. This application uses one store.</p>
@@ -309,18 +313,27 @@ async function refresh() {
 // ---- Explorer screens ----
 const tables = {};
 
-const plain = (column) => (column === 'in_plain_english' ? ' class="plain"' : '');
-
 function drawTable(id) {
   const { rows, filter = '', kind = '' } = tables[id];
   const shown = rows.filter((r) =>
     (!kind || r.kind === kind) &&
     (!filter || Object.values(r).join(' ').toLowerCase().includes(filter.toLowerCase())));
-  const columns = rows.length ? Object.keys(rows[0]) : [];
-  $(id).innerHTML = `<table class="grid"><thead><tr>${columns.map((c) => `<th${plain(c)}>${esc(c === 'in_plain_english' ? 'In plain English' : c)}</th>`).join('')}</tr></thead><tbody>${
-    shown.map((r) => `<tr>${columns.map((c) => `<td${plain(c)}>${esc(r[c] ?? '')}</td>`).join('')}</tr>`).join('') ||
+  const count = `<p class="hint" style="margin:8px 0 0">${shown.length} of ${rows.length} rows</p>`;
+  const columns = (rows.length ? Object.keys(rows[0]) : []).filter((c) => c !== 'in_plain_english');
+
+  // Rows that carry a sentence are listed one under another: the sentence, then the stored
+  // values as labelled items that wrap, so nothing needs sideways scrolling.
+  if (rows[0]?.in_plain_english) {
+    $(id).innerHTML = (shown.map((r) =>
+      `<div class="entry"><div class="say">${esc(r.in_plain_english)}</div><div class="vals">${
+        columns.filter((c) => r[c] !== '' && r[c] != null).map((c) => `<span><b>${esc(c)}</b>${esc(r[c])}</span>`).join('')
+      }</div></div>`).join('') || '<p class="hidden">No rows match.</p>') + count;
+    return;
+  }
+  $(id).innerHTML = `<table class="grid"><thead><tr>${columns.map((c) => `<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>${
+    shown.map((r) => `<tr>${columns.map((c) => `<td>${esc(r[c] ?? '')}</td>`).join('')}</tr>`).join('') ||
     `<tr><td colspan="${columns.length || 1}" class="hidden">No rows match.</td></tr>`
-  }</tbody></table><p class="hint" style="margin:8px 0 0">${shown.length} of ${rows.length} rows</p>`;
+  }</tbody></table>${count}`;
 }
 
 function setTable(id, rows) {
