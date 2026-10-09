@@ -1,0 +1,76 @@
+model
+  schema 1.1
+
+type user
+
+# A named set of users. Granting a role to group:x#member covers every member with one tuple.
+type group
+  relations
+    define member: [user]
+
+# Roles (admin, coordinator, salary_coordinator) are assigned with tuples.
+# Permissions (can_*) are derived from roles and are what the application checks.
+# Every role can be granted to a user or a group, optionally limited to departments.
+
+type country
+  relations
+    define admin: [user, user with in_department, group#member, group#member with in_department]
+    define coordinator: [user, user with in_department, group#member, group#member with in_department]
+    define salary_coordinator: [user, user with in_department, group#member, group#member with in_department]
+    define can_view_basic: admin or coordinator or salary_coordinator
+    define can_edit_basic: admin
+    define can_view_salary: salary_coordinator
+
+type zone
+  relations
+    define country: [country]
+    define admin: [user, user with in_department, group#member, group#member with in_department] or admin from country
+    define coordinator: [user, user with in_department, group#member, group#member with in_department] or coordinator from country
+    define salary_coordinator: [user, user with in_department, group#member, group#member with in_department] or salary_coordinator from country
+    define can_view_basic: admin or coordinator or salary_coordinator
+    define can_edit_basic: admin
+    define can_view_salary: salary_coordinator
+
+type area
+  relations
+    define zone: [zone]
+    define admin: [user, user with in_department, group#member, group#member with in_department] or admin from zone
+    define coordinator: [user, user with in_department, group#member, group#member with in_department] or coordinator from zone
+    define salary_coordinator: [user, user with in_department, group#member, group#member with in_department] or salary_coordinator from zone
+    define can_view_basic: admin or coordinator or salary_coordinator
+    define can_edit_basic: admin
+    define can_view_salary: salary_coordinator
+
+type centre
+  relations
+    define area: [area]
+    define admin: [user, user with in_department, group#member, group#member with in_department] or admin from area
+    define coordinator: [user, user with in_department, group#member, group#member with in_department] or coordinator from area
+    define salary_coordinator: [user, user with in_department, group#member, group#member with in_department] or salary_coordinator from area
+    define can_view_basic: admin or coordinator or salary_coordinator
+    define can_edit_basic: admin
+    define can_view_salary: salary_coordinator
+
+type sub_centre
+  relations
+    define centre: [centre]
+    define admin: [user, user with in_department, group#member, group#member with in_department] or admin from centre
+    define coordinator: [user, user with in_department, group#member, group#member with in_department] or coordinator from centre
+    define salary_coordinator: [user, user with in_department, group#member, group#member with in_department] or salary_coordinator from centre
+    define can_view_basic: admin or coordinator or salary_coordinator
+    define can_edit_basic: admin
+    define can_view_salary: salary_coordinator
+
+# An employee has no roles of its own: everything comes from the unit it is attached to.
+type employee
+  relations
+    define unit: [zone, area, centre, sub_centre]
+    define can_view_basic: can_view_basic from unit
+    define can_edit_basic: can_edit_basic from unit
+    define can_view_salary: can_view_salary from unit
+
+# allowed_departments is stored on the grant tuple.
+# employee_department is sent by the API on every request, read from the HR database.
+condition in_department(allowed_departments: list<string>, employee_department: string) {
+  employee_department in allowed_departments
+}

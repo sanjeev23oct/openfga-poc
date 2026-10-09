@@ -1,0 +1,211 @@
+name: Zone based employee access
+model_file: ./model.fga
+tuple_file: ./tuples.json
+
+# Run with: fga model test --tests fga/store.fga.yaml
+# tuples.json is generated from app/src/org.js by `npm run export-tuples`.
+# Every check sends employee_department, as the API does.
+
+tests:
+  - name: R5 zone roles reach every level below the zone
+    check:
+      # e101 sits on the zone itself, e102 on an area, e103 on a centre, e105 on a sub-centre
+      - user: user:anita
+        object: employee:e101
+        context: { employee_department: hr }
+        assertions: { can_view_basic: true, can_edit_basic: true, can_view_salary: false }
+      - user: user:anita
+        object: employee:e102
+        context: { employee_department: finance }
+        assertions: { can_view_basic: true, can_edit_basic: true, can_view_salary: false }
+      - user: user:anita
+        object: employee:e103
+        context: { employee_department: operations }
+        assertions: { can_view_basic: true, can_edit_basic: true, can_view_salary: false }
+      - user: user:anita
+        object: employee:e105
+        context: { employee_department: sales }
+        assertions: { can_view_basic: true, can_edit_basic: true, can_view_salary: false }
+
+  - name: R6 a role does not leak sideways or upwards
+    check:
+      # Anita is admin of North, e202 is in South
+      - user: user:anita
+        object: employee:e202
+        context: { employee_department: operations }
+        assertions: { can_view_basic: false, can_edit_basic: false, can_view_salary: false }
+      # Deepak is admin of Delhi area: not Punjab (sibling), not the zone-level employee above him
+      - user: user:deepak
+        object: employee:e110
+        context: { employee_department: operations }
+        assertions: { can_view_basic: false, can_edit_basic: false }
+      - user: user:deepak
+        object: employee:e101
+        context: { employee_department: hr }
+        assertions: { can_view_basic: false }
+      - user: user:deepak
+        object: employee:e105
+        context: { employee_department: sales }
+        assertions: { can_view_basic: true, can_edit_basic: true }
+      # Lata is admin of one sub-centre: not its sibling, not the parent centre
+      - user: user:lata
+        object: employee:e105
+        context: { employee_department: sales }
+        assertions: { can_view_basic: true, can_edit_basic: true }
+      - user: user:lata
+        object: employee:e106
+        context: { employee_department: operations }
+        assertions: { can_view_basic: false }
+      - user: user:lata
+        object: employee:e103
+        context: { employee_department: operations }
+        assertions: { can_view_basic: false }
+
+  - name: R7 the three roles give different permissions
+    check:
+      - user: user:bala
+        object: employee:e103
+        context: { employee_department: operations }
+        assertions: { can_view_basic: true, can_edit_basic: false, can_view_salary: false }
+      - user: user:chitra
+        object: employee:e103
+        context: { employee_department: operations }
+        assertions: { can_view_basic: true, can_edit_basic: false, can_view_salary: true }
+      - user: user:meera
+        object: employee:e103
+        context: { employee_department: operations }
+        assertions: { can_view_basic: false, can_edit_basic: false, can_view_salary: false }
+
+  - name: R9 a subset of centres inside an area
+    check:
+      - user: user:esha
+        object: employee:e103 # Rohini
+        context: { employee_department: operations }
+        assertions: { can_view_basic: true }
+      - user: user:esha
+        object: employee:e105 # Rohini Sector 7, below Rohini
+        context: { employee_department: sales }
+        assertions: { can_view_basic: true }
+      - user: user:esha
+        object: employee:e107 # Dwarka
+        context: { employee_department: sales }
+        assertions: { can_view_basic: true }
+      - user: user:esha
+        object: employee:e109 # Saket, same area but not granted
+        context: { employee_department: finance }
+        assertions: { can_view_basic: false }
+      - user: user:esha
+        object: employee:e102 # attached to the Delhi area itself
+        context: { employee_department: finance }
+        assertions: { can_view_basic: false }
+
+  - name: R10 a subset of areas inside a zone
+    check:
+      - user: user:farhan
+        object: employee:e202 # Karnataka
+        context: { employee_department: operations }
+        assertions: { can_edit_basic: true }
+      - user: user:farhan
+        object: employee:e206 # Kerala
+        context: { employee_department: operations }
+        assertions: { can_edit_basic: true }
+      - user: user:farhan
+        object: employee:e205 # Tamil Nadu, same zone but not granted
+        context: { employee_department: finance }
+        assertions: { can_view_basic: false }
+
+  - name: R11 a grant limited to departments
+    check:
+      # Gita: coordinator of North, HR only
+      - user: user:gita
+        object: employee:e104
+        context: { employee_department: hr }
+        assertions: { can_view_basic: true, can_edit_basic: false }
+      - user: user:gita
+        object: employee:e103
+        context: { employee_department: operations }
+        assertions: { can_view_basic: false }
+      # Hari: salary coordinator of West for Finance only, and admin of Pune for all departments
+      - user: user:hari
+        object: employee:e402 # Mumbai, finance
+        context: { employee_department: finance }
+        assertions: { can_view_basic: true, can_view_salary: true, can_edit_basic: false }
+      - user: user:hari
+        object: employee:e403 # Andheri, sales
+        context: { employee_department: sales }
+        assertions: { can_view_basic: false, can_view_salary: false }
+      - user: user:hari
+        object: employee:e404 # Pune, operations: admin grant only
+        context: { employee_department: operations }
+        assertions: { can_view_basic: true, can_edit_basic: true, can_view_salary: false }
+      - user: user:hari
+        object: employee:e405 # Pune, finance: both grants apply
+        context: { employee_department: finance }
+        assertions: { can_view_basic: true, can_edit_basic: true, can_view_salary: true }
+
+  - name: Group grants and the country level
+    check:
+      - user: user:jaya
+        object: employee:e205
+        context: { employee_department: finance }
+        assertions: { can_view_salary: true, can_edit_basic: false }
+      - user: user:jaya
+        object: employee:e103
+        context: { employee_department: operations }
+        assertions: { can_view_basic: false }
+      - user: user:indu
+        object: employee:e301
+        context: { employee_department: operations }
+        assertions: { can_view_basic: true, can_edit_basic: false, can_view_salary: false }
+
+  - name: R14 which employees can a user see
+    list_objects:
+      - user: user:esha
+        type: employee
+        context: { employee_department: hr }
+        assertions:
+          can_view_basic:
+            - employee:e103
+            - employee:e104
+            - employee:e105
+            - employee:e106
+            - employee:e107
+            - employee:e108
+      - user: user:lata
+        type: employee
+        context: { employee_department: sales }
+        assertions:
+          can_view_basic:
+            - employee:e105
+          can_view_salary: []
+
+  - name: R14 which units does a user hold a permission on
+    list_objects:
+      - user: user:farhan
+        type: centre
+        context: { employee_department: hr }
+        assertions:
+          can_edit_basic:
+            - centre:bengaluru
+            - centre:mysuru
+            - centre:kochi
+
+  - name: R15 who can see this employee's salary
+    list_users:
+      - object: employee:e405
+        user_filter:
+          - type: user
+        context: { employee_department: finance }
+        assertions:
+          can_view_salary:
+            users:
+              - user:hari
+      - object: employee:e205
+        user_filter:
+          - type: user
+        context: { employee_department: finance }
+        assertions:
+          can_view_salary:
+            users:
+              - user:jaya
+              - user:kiran

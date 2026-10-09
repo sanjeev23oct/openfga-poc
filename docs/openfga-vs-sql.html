@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenFGA vs SQL tables</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #fff; --ink: #1c2330; --quiet: #5d6878; --line: #dfe3ea;
+    --sql: #b45309; --sql-soft: #fdf1e0; --fga: #2456c9; --fga-soft: #e8eefc; --hit: #1d7a46; --hit-soft: #e3f4ea;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171c; --panel: #1c2027; --ink: #e7eaf0; --quiet: #9aa4b5; --line: #2e3440;
+      --sql: #f0a94e; --sql-soft: #33281a; --fga: #7aa2ff; --fga-soft: #1f2942; --hit: #5fc98c; --hit-soft: #1b3226;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 system-ui, sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 30px; line-height: 1.2; margin: 0 0 8px; text-wrap: balance; }
+  h2 { font-size: 20px; margin: 44px 0 6px; }
+  h3 { font-size: 15px; margin: 0 0 10px; letter-spacing: .02em; }
+  p { margin: 0 0 12px; max-width: 70ch; }
+  .lead { font-size: 18px; color: var(--quiet); }
+  .two { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; border-top: 4px solid var(--line); }
+  .card.sql { border-top-color: var(--sql); } .card.fga { border-top-color: var(--fga); }
+  .sql h3 { color: var(--sql); } .fga h3 { color: var(--fga); }
+  ul { margin: 0; padding-left: 20px; } li { margin-bottom: 6px; }
+  code, pre { font: 13px/1.5 ui-monospace, Menlo, Consolas, monospace; }
+  pre { margin: 10px 0 0; padding: 12px; border-radius: 8px; overflow-x: auto; background: var(--bg); }
+  code { background: var(--bg); padding: 1px 5px; border-radius: 4px; }
+  pre code { background: none; padding: 0; }
+  .scroll { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+  table { border-collapse: collapse; width: 100%; min-width: 620px; }
+  th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  tr:last-child td { border-bottom: 0; }
+  th { font-size: 13px; color: var(--quiet); }
+  th.sql { color: var(--sql); } th.fga { color: var(--fga); }
+  .tag { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
+  .tag.admin { background: var(--sql-soft); color: var(--sql); }
+  .tag.dev { background: var(--fga-soft); color: var(--fga); }
+  .chain { display: flex; flex-wrap: wrap; align-items: stretch; gap: 6px; margin: 14px 0 6px; }
+  .node { background: var(--panel); border: 1.5px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 14px; }
+  .node small { display: block; color: var(--quiet); font-size: 12px; }
+  .node.hit { border-color: var(--hit); background: var(--hit-soft); }
+  .arrow { align-self: center; color: var(--quiet); font-size: 18px; }
+  .note { color: var(--quiet); font-size: 14px; }
+  .dbgrid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); align-items: start; }
+  .dbgrid .wide { grid-column: 1 / -1; }
+  .db { border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; background: var(--bg); }
+  .db .name { font: 600 12px/1 ui-monospace, Menlo, Consolas, monospace; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  .sql .db .name { color: var(--sql); } .fga .db .name { color: var(--fga); }
+  .db table { min-width: 0; font: 12.5px/1.4 ui-monospace, Menlo, Consolas, monospace; }
+  .db th, .db td { padding: 5px 10px; white-space: nowrap; }
+  .db th { font-size: 11.5px; }
+  .db td.null { color: var(--quiet); font-style: italic; }
+  .db tr.mark td { background: var(--hit-soft); }
+  .block { margin-top: 16px; }
+  .kw { color: var(--fga); font-weight: 600; } .cm { color: var(--quiet); }
+  .verdict { border-left: 4px solid var(--fga); background: var(--panel); padding: 14px 18px; border-radius: 0 10px 10px 0; margin-top: 14px; }
+  .verdict.sql { border-left-color: var(--sql); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>OpenFGA and SQL tables answer the same question in different places</h1>
+<p class="lead">Both store who has which role, and where. Neither stores a record per user per employee. The difference is where the rules live and who changes them.</p>
+
+<h2>1. What the data looks like</h2>
+<p>The same four grants and the same employees, as each system stores them. The highlighted rows are the one grant "Deepak is admin of Delhi area".</p>
+
+<div class="card sql block">
+  <h3>SQL TABLES (your design)</h3>
+  <div class="dbgrid">
+    <div class="db"><div class="name">role</div><table>
+      <tr><th>id</th><th>code</th></tr>
+      <tr><td>1</td><td>admin</td></tr>
+      <tr><td>2</td><td>coordinator</td></tr>
+      <tr><td>3</td><td>salary_coordinator</td></tr>
+    </table></div>
+    <div class="db"><div class="name">permission</div><table>
+      <tr><th>id</th><th>code</th></tr>
+      <tr><td>1</td><td>view_basic</td></tr>
+      <tr><td>2</td><td>edit_basic</td></tr>
+      <tr><td>3</td><td>view_salary</td></tr>
+    </table></div>
+    <div class="db"><div class="name">role_permission</div><table>
+      <tr><th>role_id</th><th>permission_id</th></tr>
+      <tr><td>1</td><td>1</td></tr>
+      <tr><td>1</td><td>2</td></tr>
+      <tr><td>2</td><td>1</td></tr>
+      <tr><td>3</td><td>1</td></tr>
+      <tr><td>3</td><td>3</td></tr>
+    </table></div>
+    <div class="db wide"><div class="name">user_access &nbsp;(who has which role, and where)</div><table>
+      <tr><th>id</th><th>user_id</th><th>role_id</th><th>zone_id</th><th>area_id</th><th>centre_id</th><th>sub_centre_id</th><th>department</th></tr>
+      <tr><td>1</td><td>anita</td><td>1</td><td>north</td><td class="null">NULL</td><td class="null">NULL</td><td class="null">NULL</td><td class="null">NULL</td></tr>
+      <tr class="mark"><td>2</td><td>deepak</td><td>1</td><td>north</td><td>delhi</td><td class="null">NULL</td><td class="null">NULL</td><td class="null">NULL</td></tr>
+      <tr><td>3</td><td>esha</td><td>2</td><td>north</td><td>delhi</td><td>rohini</td><td class="null">NULL</td><td class="null">NULL</td></tr>
+      <tr><td>4</td><td>gita</td><td>2</td><td>north</td><td class="null">NULL</td><td class="null">NULL</td><td class="null">NULL</td><td>hr</td></tr>
+    </table></div>
+    <div class="db wide"><div class="name">employee &nbsp;(each row carries its place in the tree)</div><table>
+      <tr><th>id</th><th>name</th><th>department</th><th>zone_id</th><th>area_id</th><th>centre_id</th><th>sub_centre_id</th></tr>
+      <tr><td>e101</td><td>Aarav Mehta</td><td>hr</td><td>north</td><td class="null">NULL</td><td class="null">NULL</td><td class="null">NULL</td></tr>
+      <tr><td>e103</td><td>Chirag Sethi</td><td>operations</td><td>north</td><td>delhi</td><td>rohini</td><td class="null">NULL</td></tr>
+      <tr><td>e105</td><td>Eklavya Rana</td><td>sales</td><td>north</td><td>delhi</td><td>rohini</td><td>rohini-sector-7</td></tr>
+      <tr><td>e110</td><td>Jasleen Gill</td><td>operations</td><td>north</td><td>punjab</td><td>ludhiana</td><td class="null">NULL</td></tr>
+    </table></div>
+  </div>
+  <p class="note" style="margin-top:12px">NULL in a scope column means "everything below". The inheritance rule is not in any table. It is in the query you write.</p>
+</div>
+
+<div class="card fga block">
+  <h3>OPENFGA</h3>
+  <p><strong>The model file</strong> holds what your <code>role</code>, <code>permission</code> and <code>role_permission</code> tables hold, plus the inheritance rule. This is the real <code>fga/model.fga</code>, one level shown.</p>
+<pre><code><span class="kw">type</span> area
+  <span class="kw">relations</span>
+    <span class="kw">define</span> zone: [zone]                                    <span class="cm"># parent link</span>
+    <span class="kw">define</span> admin: [user, ...] <span class="kw">or</span> admin <span class="kw">from</span> zone            <span class="cm"># role, inherited from the zone</span>
+    <span class="kw">define</span> coordinator: [user, ...] <span class="kw">or</span> coordinator <span class="kw">from</span> zone
+    <span class="kw">define</span> salary_coordinator: [user, ...] <span class="kw">or</span> salary_coordinator <span class="kw">from</span> zone
+    <span class="kw">define</span> can_view_basic: admin <span class="kw">or</span> coordinator <span class="kw">or</span> salary_coordinator   <span class="cm"># = role_permission</span>
+    <span class="kw">define</span> can_edit_basic: admin
+    <span class="kw">define</span> can_view_salary: salary_coordinator</code></pre>
+
+  <p style="margin-top:16px"><strong>The tuple table</strong> holds what your <code>user_access</code> rows and the tree columns on <code>employee</code> hold. These rows are read from the POC's Postgres database.</p>
+  <div class="dbgrid">
+    <div class="db wide"><div class="name">tuple &nbsp;(read each row as: _user is relation of object)</div><table>
+      <tr><th>object_type</th><th>object_id</th><th>relation</th><th>_user</th><th>condition_name</th><th>condition_context</th></tr>
+      <tr><td>zone</td><td>north</td><td>admin</td><td>user:anita</td><td class="null">NULL</td><td class="null">NULL</td></tr>
+      <tr class="mark"><td>area</td><td>delhi</td><td>admin</td><td>user:deepak</td><td class="null">NULL</td><td class="null">NULL</td></tr>
+      <tr><td>centre</td><td>rohini</td><td>coordinator</td><td>user:esha</td><td class="null">NULL</td><td class="null">NULL</td></tr>
+      <tr><td>zone</td><td>north</td><td>coordinator</td><td>user:gita</td><td>in_department</td><td>allowed_departments: ["hr"]</td></tr>
+      <tr><td>area</td><td>delhi</td><td>zone</td><td>zone:north</td><td class="null">NULL</td><td class="null">NULL</td></tr>
+      <tr><td>centre</td><td>rohini</td><td>area</td><td>area:delhi</td><td class="null">NULL</td><td class="null">NULL</td></tr>
+      <tr><td>sub_centre</td><td>rohini-sector-7</td><td>centre</td><td>centre:rohini</td><td class="null">NULL</td><td class="null">NULL</td></tr>
+      <tr><td>employee</td><td>e103</td><td>unit</td><td>centre:rohini</td><td class="null">NULL</td><td class="null">NULL</td></tr>
+      <tr><td>employee</td><td>e105</td><td>unit</td><td>sub_centre:rohini-sector-7</td><td class="null">NULL</td><td class="null">NULL</td></tr>
+    </table></div>
+  </div>
+  <p class="note" style="margin-top:12px">The first four rows are grants. The next three are the tree. The last two place employees. The real table also has <code>store</code>, <code>user_type</code>, <code>ulid</code> and <code>inserted_at</code> columns, and stores the condition context in binary form; it is shown decoded here. Employee names, departments and salaries are not in OpenFGA at all. They stay in your HR database.</p>
+</div>
+
+<h2>2. Adding one grant</h2>
+<p>Make Deepak the admin of Delhi area. This is the highlighted row above.</p>
+<div class="two">
+  <div class="card sql">
+    <h3>SQL: ONE ROW</h3>
+<pre><code>INSERT INTO user_access
+  (user_id, role_id, zone_id, area_id, centre_id)
+VALUES
+  ('deepak', 1, 'north', 'delhi', NULL);</code></pre>
+  </div>
+  <div class="card fga">
+    <h3>OPENFGA: ONE TUPLE, THROUGH THE API</h3>
+<pre><code>fga.write({ writes: [{
+  user: 'user:deepak',
+  relation: 'admin',
+  object: 'area:delhi',
+}] });</code></pre>
+  </div>
+</div>
+
+<h2>3. How "can Deepak edit employee e105?" is answered</h2>
+<div class="two">
+  <div class="card sql">
+    <h3>SQL: MATCH THE COLUMNS</h3>
+    <p>The employee row carries its zone, area and centre. The query compares them with Deepak's row.</p>
+<pre><code>ua.zone_id = e.zone_id
+AND (ua.area_id   IS NULL OR ua.area_id   = e.area_id)
+AND (ua.centre_id IS NULL OR ua.centre_id = e.centre_id)</code></pre>
+  </div>
+  <div class="card fga">
+    <h3>OPENFGA: WALK UP THE TREE</h3>
+    <p>Start at the employee, follow parent links, and stop at the first unit where Deepak is admin.</p>
+    <div class="chain">
+      <div class="node">e105<small>employee</small></div><span class="arrow">&rarr;</span>
+      <div class="node">Sector 7<small>sub-centre</small></div><span class="arrow">&rarr;</span>
+      <div class="node">Rohini<small>centre</small></div><span class="arrow">&rarr;</span>
+      <div class="node hit">Delhi<small>admin: yes</small></div>
+    </div>
+  </div>
+</div>
+<p class="note" style="margin-top:12px">Both give the same answer. SQL can also filter, sort and total a whole list in the same query. OpenFGA answers one item at a time, so lists need an extra step.</p>
+
+<h2>4. What you do when something changes</h2>
+<div class="scroll">
+<table>
+  <thead><tr><th>Event</th><th class="sql">SQL tables</th><th class="fga">OpenFGA</th></tr></thead>
+  <tbody>
+    <tr><td>New user</td><td>1 user row</td><td>Nothing</td></tr>
+    <tr><td>Give a role on an area</td><td>1 row <span class="tag admin">admin</span></td><td>1 tuple <span class="tag admin">admin</span></td></tr>
+    <tr><td>Remove a grant</td><td>Delete 1 row <span class="tag admin">admin</span></td><td>Delete 1 tuple <span class="tag admin">admin</span></td></tr>
+    <tr><td>New action, such as Export</td><td>Insert permission and role-permission rows <span class="tag admin">admin</span>, then add the check in the app <span class="tag dev">developer</span></td><td>Add lines to the model, test, publish, add the check in the app <span class="tag dev">developer</span></td></tr>
+    <tr><td>Let a role do more</td><td>1 role-permission row <span class="tag admin">admin</span></td><td>Edit the model and publish <span class="tag dev">developer</span></td></tr>
+    <tr><td>New screen</td><td colspan="2">Same in both: show it when the user holds the permission the screen needs</td></tr>
+    <tr><td>Centre moves to another area</td><td>Update the centre, every employee in it, and any grant row naming the old area</td><td>1 tuple changed</td></tr>
+    <tr><td>New level in the hierarchy</td><td>New columns and edits to every access query <span class="tag dev">developer</span></td><td>New type in the model <span class="tag dev">developer</span></td></tr>
+  </tbody>
+</table>
+</div>
+<p class="note" style="margin-top:10px"><span class="tag admin">admin</span> a change made at runtime as data. <span class="tag dev">developer</span> a change that is reviewed and deployed.</p>
+
+<h2>5. The two real differences</h2>
+<div class="two">
+  <div class="card">
+    <h3>WHO CHANGES THE RULES</h3>
+    <p><strong>SQL:</strong> "which role may do what" is data. An admin changes it instantly, with no review.</p>
+    <p><strong>OpenFGA:</strong> it is part of the model. A developer changes it, tests it and deploys it.</p>
+  </div>
+  <div class="card">
+    <h3>WHAT HAPPENS WHEN THE TREE CHANGES</h3>
+    <p><strong>SQL:</strong> a grant row that says "Delhi, Rohini" matches nothing after Rohini moves to Punjab. Access is lost silently until someone fixes the row.</p>
+    <p><strong>OpenFGA:</strong> the grant is on Rohini itself, so it follows Rohini.</p>
+  </div>
+</div>
+
+<h2>6. Which to pick</h2>
+<div class="verdict sql">
+  <strong>SQL tables</strong> when it is one application on one database, with fixed levels and role-based access only. Lists and reports are one query, and there is nothing extra to run.
+</div>
+<div class="verdict">
+  <strong>OpenFGA</strong> when many applications share the same zones, areas and centres, or when some need access to individual items, such as workflow approvals, health records or devices. The cost is one more service to run, a sync step from each application, and extra work for list screens.
+</div>
+
+<p class="note" style="margin-top:28px">Details and tested examples: <a href="change-walkthrough.md">change-walkthrough.md</a> and <a href="list-queries-comparison.md">list-queries-comparison.md</a>.</p>
+
+</main>
+</body>
+</html>

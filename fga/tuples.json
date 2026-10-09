@@ -1,0 +1,358 @@
+[
+  {
+    "user": "country:india",
+    "relation": "country",
+    "object": "zone:north"
+  },
+  {
+    "user": "country:india",
+    "relation": "country",
+    "object": "zone:south"
+  },
+  {
+    "user": "country:india",
+    "relation": "country",
+    "object": "zone:east"
+  },
+  {
+    "user": "country:india",
+    "relation": "country",
+    "object": "zone:west"
+  },
+  {
+    "user": "zone:north",
+    "relation": "zone",
+    "object": "area:delhi"
+  },
+  {
+    "user": "zone:north",
+    "relation": "zone",
+    "object": "area:punjab"
+  },
+  {
+    "user": "zone:south",
+    "relation": "zone",
+    "object": "area:karnataka"
+  },
+  {
+    "user": "zone:south",
+    "relation": "zone",
+    "object": "area:tamil-nadu"
+  },
+  {
+    "user": "zone:south",
+    "relation": "zone",
+    "object": "area:kerala"
+  },
+  {
+    "user": "zone:east",
+    "relation": "zone",
+    "object": "area:west-bengal"
+  },
+  {
+    "user": "zone:west",
+    "relation": "zone",
+    "object": "area:maharashtra"
+  },
+  {
+    "user": "zone:west",
+    "relation": "zone",
+    "object": "area:gujarat"
+  },
+  {
+    "user": "area:delhi",
+    "relation": "area",
+    "object": "centre:rohini"
+  },
+  {
+    "user": "area:delhi",
+    "relation": "area",
+    "object": "centre:dwarka"
+  },
+  {
+    "user": "area:delhi",
+    "relation": "area",
+    "object": "centre:saket"
+  },
+  {
+    "user": "area:punjab",
+    "relation": "area",
+    "object": "centre:ludhiana"
+  },
+  {
+    "user": "area:karnataka",
+    "relation": "area",
+    "object": "centre:bengaluru"
+  },
+  {
+    "user": "area:karnataka",
+    "relation": "area",
+    "object": "centre:mysuru"
+  },
+  {
+    "user": "area:tamil-nadu",
+    "relation": "area",
+    "object": "centre:chennai"
+  },
+  {
+    "user": "area:kerala",
+    "relation": "area",
+    "object": "centre:kochi"
+  },
+  {
+    "user": "area:west-bengal",
+    "relation": "area",
+    "object": "centre:kolkata"
+  },
+  {
+    "user": "area:maharashtra",
+    "relation": "area",
+    "object": "centre:mumbai"
+  },
+  {
+    "user": "area:maharashtra",
+    "relation": "area",
+    "object": "centre:pune"
+  },
+  {
+    "user": "area:gujarat",
+    "relation": "area",
+    "object": "centre:ahmedabad"
+  },
+  {
+    "user": "centre:rohini",
+    "relation": "centre",
+    "object": "sub_centre:rohini-sector-7"
+  },
+  {
+    "user": "centre:rohini",
+    "relation": "centre",
+    "object": "sub_centre:rohini-sector-13"
+  },
+  {
+    "user": "centre:mumbai",
+    "relation": "centre",
+    "object": "sub_centre:andheri"
+  },
+  {
+    "user": "user:jaya",
+    "relation": "member",
+    "object": "group:payroll-south"
+  },
+  {
+    "user": "user:kiran",
+    "relation": "member",
+    "object": "group:payroll-south"
+  },
+  {
+    "user": "zone:north",
+    "relation": "unit",
+    "object": "employee:e101"
+  },
+  {
+    "user": "area:delhi",
+    "relation": "unit",
+    "object": "employee:e102"
+  },
+  {
+    "user": "centre:rohini",
+    "relation": "unit",
+    "object": "employee:e103"
+  },
+  {
+    "user": "centre:rohini",
+    "relation": "unit",
+    "object": "employee:e104"
+  },
+  {
+    "user": "sub_centre:rohini-sector-7",
+    "relation": "unit",
+    "object": "employee:e105"
+  },
+  {
+    "user": "sub_centre:rohini-sector-13",
+    "relation": "unit",
+    "object": "employee:e106"
+  },
+  {
+    "user": "centre:dwarka",
+    "relation": "unit",
+    "object": "employee:e107"
+  },
+  {
+    "user": "centre:dwarka",
+    "relation": "unit",
+    "object": "employee:e108"
+  },
+  {
+    "user": "centre:saket",
+    "relation": "unit",
+    "object": "employee:e109"
+  },
+  {
+    "user": "centre:ludhiana",
+    "relation": "unit",
+    "object": "employee:e110"
+  },
+  {
+    "user": "area:punjab",
+    "relation": "unit",
+    "object": "employee:e111"
+  },
+  {
+    "user": "zone:south",
+    "relation": "unit",
+    "object": "employee:e201"
+  },
+  {
+    "user": "centre:bengaluru",
+    "relation": "unit",
+    "object": "employee:e202"
+  },
+  {
+    "user": "centre:bengaluru",
+    "relation": "unit",
+    "object": "employee:e203"
+  },
+  {
+    "user": "centre:mysuru",
+    "relation": "unit",
+    "object": "employee:e204"
+  },
+  {
+    "user": "centre:chennai",
+    "relation": "unit",
+    "object": "employee:e205"
+  },
+  {
+    "user": "centre:kochi",
+    "relation": "unit",
+    "object": "employee:e206"
+  },
+  {
+    "user": "centre:kolkata",
+    "relation": "unit",
+    "object": "employee:e301"
+  },
+  {
+    "user": "area:west-bengal",
+    "relation": "unit",
+    "object": "employee:e302"
+  },
+  {
+    "user": "zone:west",
+    "relation": "unit",
+    "object": "employee:e401"
+  },
+  {
+    "user": "centre:mumbai",
+    "relation": "unit",
+    "object": "employee:e402"
+  },
+  {
+    "user": "sub_centre:andheri",
+    "relation": "unit",
+    "object": "employee:e403"
+  },
+  {
+    "user": "centre:pune",
+    "relation": "unit",
+    "object": "employee:e404"
+  },
+  {
+    "user": "centre:pune",
+    "relation": "unit",
+    "object": "employee:e405"
+  },
+  {
+    "user": "centre:ahmedabad",
+    "relation": "unit",
+    "object": "employee:e406"
+  },
+  {
+    "user": "user:indu",
+    "relation": "coordinator",
+    "object": "country:india"
+  },
+  {
+    "user": "user:anita",
+    "relation": "admin",
+    "object": "zone:north"
+  },
+  {
+    "user": "user:bala",
+    "relation": "coordinator",
+    "object": "zone:north"
+  },
+  {
+    "user": "user:chitra",
+    "relation": "salary_coordinator",
+    "object": "zone:north"
+  },
+  {
+    "user": "user:deepak",
+    "relation": "admin",
+    "object": "area:delhi"
+  },
+  {
+    "user": "user:esha",
+    "relation": "coordinator",
+    "object": "centre:rohini"
+  },
+  {
+    "user": "user:esha",
+    "relation": "coordinator",
+    "object": "centre:dwarka"
+  },
+  {
+    "user": "user:farhan",
+    "relation": "admin",
+    "object": "area:karnataka"
+  },
+  {
+    "user": "user:farhan",
+    "relation": "admin",
+    "object": "area:kerala"
+  },
+  {
+    "user": "user:gita",
+    "relation": "coordinator",
+    "object": "zone:north",
+    "condition": {
+      "name": "in_department",
+      "context": {
+        "allowed_departments": [
+          "hr"
+        ]
+      }
+    }
+  },
+  {
+    "user": "user:hari",
+    "relation": "salary_coordinator",
+    "object": "zone:west",
+    "condition": {
+      "name": "in_department",
+      "context": {
+        "allowed_departments": [
+          "finance"
+        ]
+      }
+    }
+  },
+  {
+    "user": "user:hari",
+    "relation": "admin",
+    "object": "centre:pune"
+  },
+  {
+    "user": "group:payroll-south#member",
+    "relation": "salary_coordinator",
+    "object": "zone:south"
+  },
+  {
+    "user": "user:lata",
+    "relation": "admin",
+    "object": "sub_centre:rohini-sector-7"
+  }
+]

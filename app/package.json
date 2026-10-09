@@ -1,0 +1,17 @@
+{
+  "name": "openfga-zone-access-poc",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "export-tuples": "node scripts/export-tuples.js",
+    "setup": "node scripts/setup.js",
+    "start": "node src/server.js",
+    "scenarios": "node scripts/scenarios.js"
+  },
+  "dependencies": {
+    "@openfga/sdk": "^0.9.7",
+    "@openfga/syntax-transformer": "^0.2.2",
+    "express": "^5.2.1"
+  }
+}

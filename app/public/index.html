@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zone Access POC</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #fff; --ink: #1c2330; --quiet: #5d6878; --line: #dfe3ea;
+    --accent: #2456c9; --accent-soft: #e8eefc; --good: #1d7a46; --bad: #b3261e; --warn-soft: #fdf3dc;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171c; --panel: #1c2027; --ink: #e7eaf0; --quiet: #9aa4b5; --line: #2e3440;
+      --accent: #7aa2ff; --accent-soft: #232c44; --good: #5fc98c; --bad: #ff8a80; --warn-soft: #3a3220;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 system-ui, sans-serif; }
+  header { background: var(--panel); border-bottom: 1px solid var(--line); padding: 14px 20px; display: flex; flex-wrap: wrap; gap: 16px; align-items: end; }
+  header h1 { font-size: 17px; margin: 0 auto 0 0; align-self: center; }
+  label { display: grid; gap: 4px; font-size: 12px; color: var(--quiet); }
+  select, input, button { font: inherit; color: inherit; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }
+  button { cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.link { border: 0; background: none; color: var(--accent); padding: 0; }
+  main { padding: 20px; display: grid; gap: 20px; max-width: 1280px; margin: 0 auto; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  h2 { font-size: 15px; margin: 0 0 4px; }
+  .hint { color: var(--quiet); margin: 0 0 12px; }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; white-space: nowrap; }
+  th { font-size: 12px; color: var(--quiet); font-weight: 600; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .hidden { color: var(--quiet); font-style: italic; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; background: var(--accent-soft); font-size: 12px; }
+  .trace { background: var(--warn-soft); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+  .trace details { margin-top: 6px; }
+  .trace code, pre { font: 12px/1.5 ui-monospace, Menlo, monospace; }
+  pre { margin: 8px 0 0; max-height: 280px; overflow: auto; background: var(--bg); border-radius: 8px; padding: 10px; }
+  form.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-top: 12px; }
+  .cols { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); }
+  .ok { color: var(--good); } .err { color: var(--bad); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Zone Access POC <span class="pill">OpenFGA</span></h1>
+  <label>Signed in as <select id="persona"></select></label>
+  <label>List strategy <select id="strategy"></select></label>
+</header>
+
+<main>
+  <section>
+    <h2>Employees I can see</h2>
+    <p class="hint" id="summary"></p>
+    <div class="trace" id="trace"></div>
+    <div class="scroll">
+      <table>
+        <thead><tr>
+          <th>ID</th><th>Name</th><th>Department</th><th>Unit</th><th>Designation</th>
+          <th class="num">Annual CTC</th><th>Bank account</th><th></th>
+        </tr></thead>
+        <tbody id="employees"></tbody>
+      </table>
+    </div>
+    <p id="message"></p>
+  </section>
+
+  <div class="cols">
+    <section>
+      <h2>Role grants</h2>
+      <p class="hint">Each row is one tuple in OpenFGA. Add or remove one, then switch persona to see the effect.</p>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Who</th><th>Role</th><th>Unit</th><th>Departments</th><th></th></tr></thead>
+          <tbody id="grants"></tbody>
+        </table>
+      </div>
+      <form class="row" id="grant-form">
+        <label>User or group <input name="user" placeholder="meera" required size="14"></label>
+        <label>Role <select name="role" id="grant-role"></select></label>
+        <label>Unit <select name="unit" id="grant-unit"></select></label>
+        <label>Departments <select name="departments" id="grant-departments" multiple size="4"></select></label>
+        <button class="primary">Grant</button>
+      </form>
+    </section>
+
+    <section>
+      <h2>Move a unit</h2>
+      <p class="hint">Re-parenting a centre changes one tuple. Everyone's access follows without any recalculation.</p>
+      <form class="row" id="move-form">
+        <label>Unit <select name="unit" id="move-unit"></select></label>
+        <label>New parent <select name="parent" id="move-parent"></select></label>
+        <button class="primary">Move</button>
+      </form>
+
+      <h2 style="margin-top:24px">What OpenFGA stores</h2>
+      <p class="hint" id="tuple-count"></p>
+      <button class="link" id="show-tuples">Show all tuples</button>
+      <pre id="tuples" hidden></pre>
+    </section>
+  </div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (value) => String(value).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+let meta;
+
+async function api(path, options = {}) {
+  const response = await fetch(`/api${path}`, {
+    ...options,
+    headers: { 'Content-Type': 'application/json', 'X-User': $('persona').value || 'anita' },
+    body: options.body ? JSON.stringify(options.body) : undefined,
+  });
+  const body = await response.json();
+  if (!response.ok) throw Object.assign(new Error(body.error ?? response.statusText), { body });
+  return body;
+}
+
+function say(text, ok = true) {
+  $('message').textContent = text;
+  $('message').className = ok ? 'ok' : 'err';
+}
+
+function showTrace(trace) {
+  const rows = trace.calls.map((c) => `${c.name.padEnd(12)} ${String(c.ms).padStart(6)} ms  ${c.detail}`);
+  $('trace').innerHTML =
+    `<strong>${trace.fgaCalls}</strong> OpenFGA call(s), <strong>${trace.fgaMs} ms</strong> in total` +
+    `<details><summary>Calls</summary><pre>${esc(rows.join('\n'))}</pre></details>`;
+}
+
+async function loadEmployees() {
+  const data = await api(`/employees?strategy=${$('strategy').value}`);
+  $('summary').textContent = `${data.employees.length} of ${data.total} employees visible, using the "${data.strategy}" strategy.`;
+  showTrace(data.trace);
+  $('employees').innerHTML = data.employees.map((e) => `
+    <tr>
+      <td>${esc(e.id)}</td><td>${esc(e.name)}</td><td>${esc(e.department)}</td><td>${esc(e.unitPath)}</td>
+      <td>${esc(e.designation)}</td>
+      ${e.salary
+        ? `<td class="num">${e.salary.annualCtc.toLocaleString('en-IN')}</td><td>${esc(e.salary.bankAccount)}</td>`
+        : '<td class="num hidden">hidden</td><td class="hidden">hidden</td>'}
+      <td>
+        ${e.permissions.can_edit_basic ? `<button class="link" data-edit="${esc(e.id)}" data-current="${esc(e.designation)}">Edit</button> · ` : ''}
+        <button class="link" data-audit="${esc(e.id)}">Who sees salary?</button>
+      </td>
+    </tr>`).join('') || '<tr><td colspan="8" class="hidden">No employees visible for this user.</td></tr>';
+}
+
+async function loadGrants() {
+  const { grants } = await api('/grants');
+  $('grants').innerHTML = grants.map((g) => `
+    <tr>
+      <td>${esc(g.user)}</td><td>${esc(g.role)}</td><td>${esc(g.unitPath)}</td>
+      <td>${g.departments.length ? esc(g.departments.join(', ')) : 'all'}</td>
+      <td><button class="link" data-revoke='${esc(JSON.stringify({ user: g.user, role: g.role, unit: g.unit }))}'>Remove</button></td>
+    </tr>`).join('');
+}
+
+async function loadTuples() {
+  const data = await api('/tuples');
+  $('tuple-count').textContent = `${data.count} tuples describe the whole organisation and every grant. There is no row per user per employee.`;
+  $('tuples').textContent = data.tuples
+    .map((t) => `${t.object}  #${t.relation}  @${t.user}` + (t.condition ? `  [${t.condition.name} ${JSON.stringify(t.condition.context)}]` : ''))
+    .join('\n');
+}
+
+async function refresh() {
+  try {
+    await Promise.all([loadEmployees(), loadGrants(), loadTuples()]);
+  } catch (error) {
+    say(error.message, false);
+  }
+}
+
+const options = (items, value, label) => items.map((i) => `<option value="${esc(value(i))}">${esc(label(i))}</option>`).join('');
+
+function fillMoveParents() {
+  const unit = meta.units.find((u) => u.object === $('move-unit').value);
+  const parentType = unit.parent.split(':')[0];
+  $('move-parent').innerHTML = options(meta.units.filter((u) => u.type === parentType), (u) => u.object, (u) => u.path);
+}
+
+async function loadMeta() {
+  meta = await api('/meta');
+  const movable = meta.units.filter((u) => u.parent && u.type !== 'zone');
+  const keep = $('move-unit').value;
+  $('grant-unit').innerHTML = options(meta.units, (u) => u.object, (u) => `${u.path} (${u.type})`);
+  $('move-unit').innerHTML = options(movable, (u) => u.object, (u) => `${u.path} (${u.type})`);
+  if (keep) $('move-unit').value = keep;
+  fillMoveParents();
+}
+
+async function init() {
+  $('persona').innerHTML = '<option value="anita">anita</option>';
+  await loadMeta();
+  $('persona').innerHTML = options(meta.personas, (p) => p.id, (p) => p.label);
+  $('persona').value = 'anita';
+  $('strategy').innerHTML = options(meta.strategies, (s) => s, (s) => s);
+  $('grant-role').innerHTML = options(meta.roles, (r) => r, (r) => r);
+  $('grant-departments').innerHTML = options(meta.departments, (d) => d, (d) => d);
+  await refresh();
+}
+
+$('persona').onchange = () => { say(''); refresh(); };
+$('strategy').onchange = () => loadEmployees();
+$('move-unit').onchange = fillMoveParents;
+$('show-tuples').onclick = () => { $('tuples').hidden = !$('tuples').hidden; };
+
+$('employees').onclick = async (event) => {
+  const { edit, current, audit } = event.target.dataset;
+  try {
+    if (edit) {
+      const designation = prompt('New designation', current);
+      if (!designation) return;
+      await api(`/employees/${edit}`, { method: 'PATCH', body: { designation } });
+      say(`Updated ${edit}.`);
+      await loadEmployees();
+    } else if (audit) {
+      const { users } = await api(`/employees/${audit}/salary-viewers`);
+      say(`Salary of ${audit} is visible to: ${users.length ? users.join(', ') : 'nobody'}.`);
+    }
+  } catch (error) {
+    say(error.message, false);
+  }
+};
+
+$('grants').onclick = async (event) => {
+  if (!event.target.dataset.revoke) return;
+  await api('/grants', { method: 'DELETE', body: JSON.parse(event.target.dataset.revoke) });
+  say('Grant removed.');
+  await refresh();
+};
+
+$('grant-form').onsubmit = async (event) => {
+  event.preventDefault();
+  const form = new FormData(event.target);
+  try {
+    await api('/grants', { method: 'POST', body: { user: form.get('user'), role: form.get('role'), unit: form.get('unit'), departments: form.getAll('departments') } });
+    say('Grant added.');
+    await refresh();
+  } catch (error) {
+    say(error.message, false);
+  }
+};
+
+$('move-form').onsubmit = async (event) => {
+  event.preventDefault();
+  const form = new FormData(event.target);
+  try {
+    const { path } = await api('/units/move', { method: 'POST', body: { unit: form.get('unit'), parent: form.get('parent') } });
+    say(`Moved. New path: ${path}.`);
+    await loadMeta();
+    await refresh();
+  } catch (error) {
+    say(error.message, false);
+  }
+};
+
+init();
+</script>
+</body>
+</html>
